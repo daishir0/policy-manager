@@ -3,6 +3,17 @@ import { auth } from "@/lib/auth";
 import { userService } from "@/lib/services/user.service";
 import { auditService } from "@/lib/services/audit.service";
 import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma";
+
+// フロントエンドのロール名 → DBロール名
+function mapStringToRoleName(roleString: string): string {
+  const roleMap: Record<string, string> = {
+    "ADMIN": "system_admin",
+    "DOCUMENT_ADMIN": "document_admin",
+    "EMPLOYEE": "employee",
+  };
+  return roleMap[roleString] || roleString.toLowerCase();
+}
 
 export async function GET(
   request: NextRequest,
@@ -44,7 +55,23 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const user = await userService.updateUser(id, body);
+    const { role, ...userData } = body;
+
+    // ロール名が渡された場合はroleIdに変換
+    let updateData = { ...userData };
+    if (role) {
+      const dbRoleName = mapStringToRoleName(role);
+      const roleRecord = await prisma.role.findUnique({
+        where: { name: dbRoleName }
+      });
+
+      if (!roleRecord) {
+        return NextResponse.json({ error: "無効なロールです" }, { status: 400 });
+      }
+      updateData.roleId = roleRecord.id;
+    }
+
+    const user = await userService.updateUser(id, updateData);
 
     await auditService.log({
       userId: session.user.id,

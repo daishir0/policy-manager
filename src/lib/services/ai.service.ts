@@ -231,15 +231,28 @@ ${context}
     idea: string,
     additionalContext?: string
   ): Promise<DraftResult> {
-    // 関連文書を検索
-    const similarDocs = await embeddingService.searchSimilar(idea, 5, 0.5);
+    // 関連文書を検索（Embeddingサービスが利用できない場合は空配列）
+    let similarDocs: Array<{
+      documentId: string;
+      chunkText: string;
+      similarity: number;
+    }> = [];
+
+    try {
+      similarDocs = await embeddingService.searchSimilar(idea, 5, 0.5);
+    } catch (error) {
+      console.warn("Embedding service unavailable, generating draft without reference documents:", error);
+      // Embeddingサービスが利用できない場合は参照文書なしで生成を続行
+    }
 
     // 文書の詳細を取得
     const documentIds = [...new Set(similarDocs.map((d) => d.documentId))];
-    const documents = await prisma.document.findMany({
-      where: { id: { in: documentIds } },
-      select: { id: true, title: true, content: true },
-    });
+    const documents = documentIds.length > 0
+      ? await prisma.document.findMany({
+          where: { id: { in: documentIds } },
+          select: { id: true, title: true, content: true },
+        })
+      : [];
 
     const docMap = new Map(documents.map((d) => [d.id, d]));
 

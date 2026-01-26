@@ -41,6 +41,10 @@ export default function UsersPage() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({ email: "", name: "", password: "", role: "EMPLOYEE" });
   const [creating, setCreating] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", role: "" });
+  const [updating, setUpdating] = useState(false);
 
   const fetchUsers = async (search?: string) => {
     setLoading(true);
@@ -101,6 +105,35 @@ export default function UsersPage() {
       fetchUsers();
     } catch (err) {
       alert(err instanceof Error ? err.message : "エラーが発生しました");
+    }
+  };
+
+  const handleOpenEditDialog = (user: User) => {
+    setEditingUser(user);
+    setEditForm({ name: user.name || "", role: user.role });
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditUser = async () => {
+    if (!editingUser) return;
+    setUpdating(true);
+    try {
+      const response = await fetch(`/api/users/${editingUser.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editForm),
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "ユーザーの更新に失敗しました");
+      }
+      setIsEditDialogOpen(false);
+      setEditingUser(null);
+      fetchUsers();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "エラーが発生しました");
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -265,13 +298,19 @@ export default function UsersPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEditDialog(user)}
+                      data-testid="edit-user-button"
+                    >
                       <Edit className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleDeleteUser(user.id)}
+                      data-testid="delete-user-button"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
@@ -284,6 +323,50 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* 編集ダイアログ */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>ユーザー編集</DialogTitle>
+            <DialogDescription>
+              {editingUser?.email} の情報を編集します
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">名前</Label>
+              <Input
+                id="edit-name"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                placeholder="山田 太郎"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-role">ロール</Label>
+              <select
+                id="edit-role"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2"
+                value={editForm.role}
+                onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+              >
+                <option value="EMPLOYEE">一般従業員</option>
+                <option value="DOCUMENT_ADMIN">文書管理者</option>
+                <option value="ADMIN">システム管理者</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              キャンセル
+            </Button>
+            <Button onClick={handleEditUser} disabled={updating}>
+              {updating ? "更新中..." : "更新"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
