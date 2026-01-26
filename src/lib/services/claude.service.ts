@@ -1,8 +1,20 @@
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const MODEL = "claude-sonnet-4-20250514";
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
+
+// 利用可能なモデル
+export const AVAILABLE_MODELS = {
+  "haiku": "claude-3-5-haiku-20241022",      // 最も安価
+  "sonnet": "claude-3-5-sonnet-20241022",    // バランス型
+  "sonnet4": "claude-sonnet-4-20250514",     // 高性能
+  "opus": "claude-3-opus-20240229",          // 最高性能
+} as const;
+
+export type ModelKey = keyof typeof AVAILABLE_MODELS;
+
+// デフォルトモデル（環境変数で上書き可能）
+const DEFAULT_MODEL = process.env.CLAUDE_MODEL || "haiku";
 
 export interface Message {
   role: "user" | "assistant";
@@ -25,6 +37,16 @@ export class ClaudeService {
     this.systemPromptCache = prompt;
   }
 
+  // モデルIDを取得
+  private getModelId(modelKey?: ModelKey | string): string {
+    const key = modelKey || DEFAULT_MODEL;
+    if (key in AVAILABLE_MODELS) {
+      return AVAILABLE_MODELS[key as ModelKey];
+    }
+    // 直接モデルIDが指定された場合はそのまま使用
+    return key;
+  }
+
   // メッセージを送信
   async sendMessage(
     messages: Message[],
@@ -32,13 +54,15 @@ export class ClaudeService {
       systemPrompt?: string;
       maxTokens?: number;
       temperature?: number;
+      model?: ModelKey | string;
     } = {}
   ): Promise<ClaudeResponse> {
     if (!ANTHROPIC_API_KEY) {
       throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
-    const { systemPrompt, maxTokens = 4096, temperature = 0.7 } = options;
+    const { systemPrompt, maxTokens = 4096, temperature = 0.7, model } = options;
+    const modelId = this.getModelId(model);
 
     let lastError: Error | null = null;
 
@@ -52,7 +76,7 @@ export class ClaudeService {
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: MODEL,
+            model: modelId,
             max_tokens: maxTokens,
             temperature,
             system: systemPrompt || this.systemPromptCache || undefined,
@@ -105,13 +129,15 @@ export class ClaudeService {
       systemPrompt?: string;
       maxTokens?: number;
       temperature?: number;
+      model?: ModelKey | string;
     } = {}
   ): AsyncGenerator<string> {
     if (!ANTHROPIC_API_KEY) {
       throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
-    const { systemPrompt, maxTokens = 4096, temperature = 0.7 } = options;
+    const { systemPrompt, maxTokens = 4096, temperature = 0.7, model } = options;
+    const modelId = this.getModelId(model);
 
     const response = await fetch(ANTHROPIC_API_URL, {
       method: "POST",
@@ -121,7 +147,7 @@ export class ClaudeService {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: MODEL,
+        model: modelId,
         max_tokens: maxTokens,
         temperature,
         stream: true,
