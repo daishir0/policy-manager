@@ -1,10 +1,18 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import type { JWT } from "next-auth/jwt";
 import type { Session, User } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "./auth.config";
+
+// カスタムエラークラス（アカウントロック用）
+class AccountLockedError extends CredentialsSignin {
+  constructor() {
+    super("ACCOUNT_LOCKED");
+    this.code = "ACCOUNT_LOCKED";
+  }
+}
 
 const fullAuthConfig = {
   ...authConfig,
@@ -42,7 +50,7 @@ const fullAuthConfig = {
 
           // アカウントロックチェック
           if (user.lockedUntil && user.lockedUntil > new Date()) {
-            throw new Error("ACCOUNT_LOCKED");
+            throw new AccountLockedError();
           }
 
           console.log("[Auth] Comparing password...");
@@ -65,6 +73,11 @@ const fullAuthConfig = {
               where: { id: user.id },
               data: updateData,
             });
+
+            // 5回目の失敗で即座にロックエラーを返す
+            if (failedAttempts >= 5) {
+              throw new AccountLockedError();
+            }
 
             return null;
           }

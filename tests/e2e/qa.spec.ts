@@ -1,13 +1,24 @@
 import { test, expect } from "@playwright/test";
 
-// AI APIが利用可能かどうかをチェック（OPENAI_API_KEYが設定されているか）
-const AI_ENABLED = !!process.env.OPENAI_API_KEY;
+// AI APIが利用可能かどうかをチェック（ANTHROPIC_API_KEYが設定されているか）
+const AI_ENABLED = !!process.env.ANTHROPIC_API_KEY;
 
 test.describe("対話型Q&A", () => {
-  test.beforeEach(async ({ page }) => {
+  const testEmail = process.env.TEST_USER_EMAIL || "admin@example.com";
+
+  test.beforeEach(async ({ page, request }) => {
+    // アカウントロックをリセット
+    try {
+      await request.post("/api/test/reset-user-lock", {
+        data: { email: testEmail },
+      });
+    } catch {
+      // 無視
+    }
+
     // テストユーザーでログイン
     await page.goto("/login");
-    await page.fill('input[type="email"]', process.env.TEST_USER_EMAIL || "admin@example.com");
+    await page.fill('input[type="email"]', testEmail);
     await page.fill('input[type="password"]', process.env.TEST_USER_PASSWORD || "password123");
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/admin/, { timeout: 10000 });
@@ -20,7 +31,7 @@ test.describe("対話型Q&A", () => {
   });
 
   test("質問を送信できる", async ({ page }) => {
-    test.skip(!AI_ENABLED, "AI APIが設定されていません（OPENAI_API_KEY）");
+    test.skip(!AI_ENABLED, "AI APIが設定されていません（ANTHROPIC_API_KEY）");
     await page.goto("/admin/qa");
 
     // 質問を入力
@@ -65,7 +76,7 @@ test.describe("対話型Q&A", () => {
   });
 
   test("根拠文書へのリンクが表示される", async ({ page }) => {
-    test.skip(!AI_ENABLED, "AI APIが設定されていません（OPENAI_API_KEY）");
+    test.skip(!AI_ENABLED, "AI APIが設定されていません（ANTHROPIC_API_KEY）");
     await page.goto("/admin/qa");
 
     // 質問を送信
@@ -85,7 +96,7 @@ test.describe("対話型Q&A", () => {
 
   test.describe("フィードバック機能", () => {
     test("回答に良いフィードバックを送信できる", async ({ page }) => {
-      test.skip(!AI_ENABLED, "AI APIが設定されていません（OPENAI_API_KEY）");
+      test.skip(!AI_ENABLED, "AI APIが設定されていません（ANTHROPIC_API_KEY）");
       await page.goto("/admin/qa");
 
       // 質問を送信
@@ -103,7 +114,7 @@ test.describe("対話型Q&A", () => {
     });
 
     test("回答に悪いフィードバックを送信できる", async ({ page }) => {
-      test.skip(!AI_ENABLED, "AI APIが設定されていません（OPENAI_API_KEY）");
+      test.skip(!AI_ENABLED, "AI APIが設定されていません（ANTHROPIC_API_KEY）");
       await page.goto("/admin/qa");
 
       // 質問を送信
@@ -122,7 +133,7 @@ test.describe("対話型Q&A", () => {
   });
 
   test("会話履歴が保持される", async ({ page }) => {
-    test.skip(!AI_ENABLED, "AI APIが設定されていません（OPENAI_API_KEY）");
+    test.skip(!AI_ENABLED, "AI APIが設定されていません（ANTHROPIC_API_KEY）");
     await page.goto("/admin/qa");
 
     // 最初の質問

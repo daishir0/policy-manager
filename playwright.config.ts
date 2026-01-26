@@ -9,10 +9,10 @@ if (!BASE_URL) {
 
 export default defineConfig({
   testDir: "./tests/e2e",
-  fullyParallel: true,
+  fullyParallel: false, // 共有状態（アカウントロックなど）の競合を防ぐため
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  retries: process.env.CI ? 2 : 1, // ローカルでも1回リトライ
+  workers: 1, // 順次実行で安定性を確保
   reporter: "html",
   use: {
     baseURL: BASE_URL,

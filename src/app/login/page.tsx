@@ -27,10 +27,26 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        if (result.error === "ACCOUNT_LOCKED") {
+        // NextAuth v5ではCredentialsSigninのサブクラスのcodeはresult.codeで取得可能
+        if (result.code === "ACCOUNT_LOCKED" || result.error === "ACCOUNT_LOCKED") {
           setError("アカウントがロックされています。しばらく待ってから再試行してください。");
         } else {
-          setError("メールアドレスまたはパスワードが正しくありません。");
+          // ログイン失敗時、アカウントがロックされているか確認
+          try {
+            const lockCheckResponse = await fetch("/api/auth/check-lock", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email }),
+            });
+            const lockData = await lockCheckResponse.json();
+            if (lockData.locked) {
+              setError("アカウントがロックされています。しばらく待ってから再試行してください。");
+            } else {
+              setError("メールアドレスまたはパスワードが正しくありません。");
+            }
+          } catch {
+            setError("メールアドレスまたはパスワードが正しくありません。");
+          }
         }
       } else {
         router.push(callbackUrl);

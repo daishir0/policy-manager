@@ -1,10 +1,21 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("ユーザー管理", () => {
-  test.beforeEach(async ({ page }) => {
+  const testEmail = process.env.TEST_USER_EMAIL || "admin@example.com";
+
+  test.beforeEach(async ({ page, request }) => {
+    // アカウントロックをリセット
+    try {
+      await request.post("/api/test/reset-user-lock", {
+        data: { email: testEmail },
+      });
+    } catch {
+      // 無視
+    }
+
     // 管理者でログイン
     await page.goto("/login");
-    await page.fill('input[type="email"]', process.env.TEST_USER_EMAIL || "admin@example.com");
+    await page.fill('input[type="email"]', testEmail);
     await page.fill('input[type="password"]', process.env.TEST_USER_PASSWORD || "password123");
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/admin/, { timeout: 10000 });

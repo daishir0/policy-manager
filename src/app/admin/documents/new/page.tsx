@@ -8,18 +8,35 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Loader2, CheckCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Save, Loader2, CheckCircle, AlertTriangle, Search } from "lucide-react";
 import Link from "next/link";
+
+interface Contradiction {
+  severity: "high" | "medium" | "low";
+  description: string;
+  affectedDocumentId: string;
+  affectedDocumentTitle: string;
+  affectedSection: string;
+  suggestion: string;
+}
+
+interface ContradictionResult {
+  hasContradictions: boolean;
+  contradictions: Contradiction[];
+}
 
 export default function NewDocumentPage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [summary, setSummary] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [contradictionResult, setContradictionResult] = useState<ContradictionResult | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +70,48 @@ export default function NewDocumentPage() {
       setError("文書の作成に失敗しました");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleContradictionCheck = async () => {
+    if (!title || !content) {
+      setError("矛盾チェックにはタイトルと本文が必要です");
+      return;
+    }
+
+    setIsChecking(true);
+    setError("");
+    setContradictionResult(null);
+
+    try {
+      const response = await fetch("/api/ai/contradiction-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, content }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setContradictionResult(result);
+      } else {
+        const data = await response.json();
+        setError(data.error || "矛盾チェックに失敗しました");
+      }
+    } catch {
+      setError("矛盾チェックに失敗しました");
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const getSeverityBadge = (severity: "high" | "medium" | "low") => {
+    switch (severity) {
+      case "high":
+        return <Badge variant="destructive">高</Badge>;
+      case "medium":
+        return <Badge variant="default">中</Badge>;
+      case "low":
+        return <Badge variant="secondary">低</Badge>;
     }
   };
 
@@ -150,7 +209,60 @@ export default function NewDocumentPage() {
               </div>
             </div>
 
+            {/* 矛盾チェック結果 */}
+            {contradictionResult && (
+              <div data-testid="contradiction-result" className="space-y-4">
+                {contradictionResult.hasContradictions ? (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                      <span className="font-medium text-yellow-800">
+                        {contradictionResult.contradictions.length}件の矛盾が見つかりました
+                      </span>
+                    </div>
+                    <div className="space-y-3">
+                      {contradictionResult.contradictions.map((c, index) => (
+                        <div key={index} className="bg-white border rounded p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            {getSeverityBadge(c.severity)}
+                            <span className="font-medium">{c.affectedDocumentTitle}</span>
+                          </div>
+                          <p className="text-sm text-gray-700 mb-2">{c.description}</p>
+                          <p className="text-sm text-gray-500">
+                            <span className="font-medium">提案:</span> {c.suggestion}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-2">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                    <span className="text-green-800">矛盾は見つかりませんでした</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleContradictionCheck}
+                disabled={isChecking || !title || !content}
+              >
+                {isChecking ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    チェック中...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    矛盾チェック
+                  </>
+                )}
+              </Button>
               <Link href="/admin/documents">
                 <Button variant="outline" type="button">
                   キャンセル

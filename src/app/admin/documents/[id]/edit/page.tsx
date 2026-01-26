@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Loader2, CheckCircle } from "lucide-react";
+import { ArrowLeft, Save, Loader2, CheckCircle, Upload, Paperclip, X } from "lucide-react";
 import Link from "next/link";
 
 type Document = {
@@ -36,6 +36,8 @@ export default function EditDocumentPage({
   const [categoryId, setCategoryId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [attachments, setAttachments] = useState<{ id: string; filename: string }[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     async function fetchDocument() {
@@ -60,6 +62,42 @@ export default function EditDocumentPage({
     }
     fetchDocument();
   }, [resolvedParams.id]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setError("");
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`/api/documents/${resolvedParams.id}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const attachment = await response.json();
+        setAttachments((prev) => [...prev, { id: attachment.id, filename: file.name }]);
+      } else {
+        const data = await response.json();
+        setError(data.error || "ファイルのアップロードに失敗しました");
+      }
+    } catch {
+      setError("ファイルのアップロードに失敗しました");
+    } finally {
+      setIsUploading(false);
+      // Reset the input
+      e.target.value = "";
+    }
+  };
+
+  const handleRemoveAttachment = (attachmentId: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,12 +237,44 @@ export default function EditDocumentPage({
 
             <div className="space-y-2">
               <Label htmlFor="attachment">添付ファイル</Label>
-              <Input
-                id="attachment"
-                name="attachment"
-                type="file"
-                className="cursor-pointer"
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  id="attachment"
+                  name="attachment"
+                  type="file"
+                  className="cursor-pointer"
+                  onChange={handleFileUpload}
+                  disabled={isUploading}
+                />
+                {isUploading && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    アップロード中...
+                  </div>
+                )}
+              </div>
+              {attachments.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center gap-2 text-sm bg-muted p-2 rounded"
+                    >
+                      <Paperclip className="h-4 w-4" />
+                      <span>{attachment.filename}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 ml-auto"
+                        onClick={() => handleRemoveAttachment(attachment.id)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-4">

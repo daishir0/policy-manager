@@ -1,13 +1,24 @@
 import { test, expect } from "@playwright/test";
 
-// AI APIが利用可能かどうかをチェック（OPENAI_API_KEYが設定されているか）
-const AI_ENABLED = !!process.env.OPENAI_API_KEY;
+// AI APIが利用可能かどうかをチェック（ANTHROPIC_API_KEYが設定されているか）
+const AI_ENABLED = !!process.env.ANTHROPIC_API_KEY;
 
 test.describe("文書管理フロー", () => {
-  test.beforeEach(async ({ page }) => {
+  const testEmail = process.env.TEST_USER_EMAIL || "admin@example.com";
+
+  test.beforeEach(async ({ page, request }) => {
+    // アカウントロックをリセット（前のテストでロックされている可能性があるため）
+    try {
+      await request.post("/api/test/reset-user-lock", {
+        data: { email: testEmail },
+      });
+    } catch {
+      // APIがない場合は無視
+    }
+
     // テストユーザーでログイン
     await page.goto("/login");
-    await page.fill('input[type="email"]', process.env.TEST_USER_EMAIL || "admin@example.com");
+    await page.fill('input[type="email"]', testEmail);
     await page.fill('input[type="password"]', process.env.TEST_USER_PASSWORD || "password123");
     await page.click('button[type="submit"]');
     await page.waitForURL(/\/admin/, { timeout: 10000 });
@@ -64,7 +75,7 @@ test.describe("文書管理フロー", () => {
     });
 
     test("矛盾チェックが実行される", async ({ page }) => {
-      test.skip(!AI_ENABLED, "AI APIが設定されていません（OPENAI_API_KEY）");
+      test.skip(!AI_ENABLED, "AI APIが設定されていません（ANTHROPIC_API_KEY）");
       await page.goto("/admin/documents/new");
 
       // タイトル入力
@@ -100,8 +111,15 @@ test.describe("文書管理フロー", () => {
     test("添付ファイルをアップロードできる", async ({ page }) => {
       // 文書編集ページへ移動
       await page.goto("/admin/documents");
-      await page.click("table tbody tr:first-child td:last-child button:has(svg)");
-      await page.click('text=編集');
+      // 最初の文書の編集アイコンをクリック
+      const editButton = page.locator('table tbody tr:first-child a[href*="/edit"]');
+      if (await editButton.count() > 0) {
+        await editButton.click();
+      } else {
+        // 文書詳細ページ経由で編集
+        await page.click("table tbody tr:first-child a");
+        await page.click('text=編集');
+      }
 
       // ファイル選択
       const fileInput = page.locator('input[type="file"]');

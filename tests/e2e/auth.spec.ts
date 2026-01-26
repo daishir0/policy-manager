@@ -31,10 +31,21 @@ test.describe("認証フロー", () => {
   });
 
   test.describe("認証済みユーザー", () => {
-    test.beforeEach(async ({ page }) => {
+    const testEmail = process.env.TEST_USER_EMAIL || "admin@example.com";
+
+    test.beforeEach(async ({ page, request }) => {
+      // アカウントロックをリセット
+      try {
+        await request.post("/api/test/reset-user-lock", {
+          data: { email: testEmail },
+        });
+      } catch {
+        // 無視
+      }
+
       // テストユーザーでログイン
       await page.goto("/login");
-      await page.fill('input[type="email"]', process.env.TEST_USER_EMAIL || "admin@example.com");
+      await page.fill('input[type="email"]', testEmail);
       await page.fill('input[type="password"]', process.env.TEST_USER_PASSWORD || "password123");
       await page.click('button[type="submit"]');
       // ダッシュボードへのリダイレクトを待機
@@ -55,8 +66,11 @@ test.describe("認証フロー", () => {
     test("ログアウトが機能する", async ({ page }) => {
       // ユーザーメニューを開く
       await page.click('[data-testid="user-menu"]');
+      // ドロップダウンメニューが開くのを待つ
+      const logoutButton = page.locator("text=ログアウト");
+      await expect(logoutButton).toBeVisible({ timeout: 5000 });
       // ログアウトボタンをクリック
-      await page.click("text=ログアウト");
+      await logoutButton.click();
       // ログインページにリダイレクトされることを確認（タイムアウトを長めに設定）
       await expect(page).toHaveURL(/\/login/, { timeout: 15000 });
     });
@@ -64,20 +78,55 @@ test.describe("認証フロー", () => {
 });
 
 test.describe("アカウントロック", () => {
-  test("連続ログイン失敗でアカウントがロックされる", async ({ page }) => {
+  // このテストは順次実行（他のテストと競合しないように）
+  test.describe.configure({ mode: "serial" });
+
+  // アカウントロックテスト用にテストユーザーを使用
+  const testEmail = process.env.TEST_USER_EMAIL || "admin@example.com";
+  const wrongPassword = "wrongpassword123";
+
+  test("連続ログイン失敗でアカウントがロックされる", async ({ page, request }) => {
+    // テスト前にアカウントのロック状態をリセット
+    await request.post("/api/test/reset-user-lock", {
+      data: { email: testEmail },
+    }).catch(() => {});
+
+    // 新しいコンテキストでテストを実行（他のテストの影響を受けない）
     await page.goto("/login");
 
     // 5回連続で失敗を試みる
     for (let i = 0; i < 5; i++) {
-      await page.fill('input[type="email"]', "locktest@example.com");
-      await page.fill('input[type="password"]', "wrongpassword");
+      // 入力フィールドをクリアしてから入力
+      await page.fill('input[type="email"]', testEmail);
+      await page.fill('input[type="password"]', wrongPassword);
       await page.click('button[type="submit"]');
-      await page.waitForTimeout(500);
+
+      // エラーメッセージが表示されるまで待機
+      try {
+        await page.waitForSelector(".bg-red-50", { timeout: 5000 });
+
+        // 5回目の試行後はロックメッセージを確認
+        if (i === 4) {
+          const lockMessage = page.locator("text=アカウントがロックされています");
+          if (await lockMessage.isVisible()) {
+            // ロックメッセージが表示された場合はテスト成功
+            await expect(lockMessage).toBeVisible();
+            break;
+          }
+        }
+      } catch {
+        // タイムアウトは無視
+      }
     }
 
-    // アカウントロックメッセージを確認
+    // 最終確認：ロックメッセージが表示されているか
     await expect(
       page.locator("text=アカウントがロックされています")
     ).toBeVisible({ timeout: 10000 });
+
+    // テスト後のクリーンアップ
+    await request.post("/api/test/reset-user-lock", {
+      data: { email: testEmail },
+    }).catch(() => {});
   });
 });

@@ -181,6 +181,7 @@ export function ChatInterface({
                 className={`max-w-[80%] ${
                   message.role === "user" ? "order-first" : ""
                 }`}
+                data-testid={message.role === "assistant" ? "assistant-message" : "user-message"}
               >
                 <Card
                   className={

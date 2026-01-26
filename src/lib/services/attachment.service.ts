@@ -24,7 +24,8 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 export const uploadAttachmentSchema = z.object({
-  documentId: z.string().uuid(),
+  // CUID形式（Prismaのデフォルト）またはUUID形式を許可
+  documentId: z.string().min(1),
   fileName: z.string().min(1),
   mimeType: z.string().refine((val) => ALLOWED_MIME_TYPES.includes(val), {
     message: "許可されていないファイル形式です",
