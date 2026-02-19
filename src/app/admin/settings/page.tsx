@@ -1,36 +1,114 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Shield, Database, Cpu, Globe, Bell, CheckCircle } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Settings, Cpu, Globe, CheckCircle, RefreshCw, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
+
+const MODEL_OPTIONS = [
+  { value: "haiku", label: "Claude 3.5 Haiku", description: "高速・低コスト" },
+  { value: "sonnet", label: "Claude 3.5 Sonnet", description: "バランス型" },
+  { value: "sonnet4", label: "Claude Sonnet 4", description: "高性能" },
+  { value: "opus", label: "Claude 3 Opus", description: "最高性能" },
+];
 
 export default function SettingsPage() {
-  const [saved, setSaved] = useState(false);
+  const { data: session, status } = useSession();
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  // 設定値
+  const [apiKeyDisplay, setApiKeyDisplay] = useState("");
+  const [apiKeySet, setApiKeySet] = useState(false);
+  const [newApiKey, setNewApiKey] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("haiku");
+
+  useEffect(() => {
+    if (status === "loading") return;
+    if (!session || session.user.role !== "ADMIN") {
+      router.replace("/admin");
+    }
+  }, [session, status, router]);
+
+  useEffect(() => {
+    if (!session || session.user.role !== "ADMIN") return;
+    fetch("/api/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        setApiKeyDisplay(data.ANTHROPIC_API_KEY || "");
+        setApiKeySet(data.ANTHROPIC_API_KEY_SET || false);
+        setSelectedModel(data.CLAUDE_MODEL || "haiku");
+      })
+      .catch(() => toast.error("設定の取得に失敗しました"))
+      .finally(() => setLoading(false));
+  }, [session]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const body: Record<string, string> = {
+        CLAUDE_MODEL: selectedModel,
+      };
+      // APIキーが入力された場合のみ更新
+      if (newApiKey.trim()) {
+        body.ANTHROPIC_API_KEY = newApiKey.trim();
+      }
+
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) throw new Error("保存失敗");
+
+      toast.success("設定を保存しました");
+
+      // 再取得して表示を更新
+      const updated = await fetch("/api/settings").then((r) => r.json());
+      setApiKeyDisplay(updated.ANTHROPIC_API_KEY || "");
+      setApiKeySet(updated.ANTHROPIC_API_KEY_SET || false);
+      setSelectedModel(updated.CLAUDE_MODEL || "haiku");
+      setNewApiKey("");
+    } catch {
+      toast.error("設定の保存に失敗しました");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (status === "loading" || loading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">設定</h1>
-        <p className="text-muted-foreground">
-          システム設定を管理します
-        </p>
+        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+          <Settings className="h-8 w-8" />
+          設定
+        </h1>
+        <p className="text-muted-foreground">システム設定を管理します</p>
       </div>
-
-      {saved && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded flex items-center gap-2">
-          <CheckCircle className="h-4 w-4" />
-          設定を保存しました
-        </div>
-      )}
 
       <div className="grid gap-6">
         {/* システム情報 */}
@@ -40,222 +118,116 @@ export default function SettingsPage() {
               <Cpu className="h-5 w-5" />
               システム情報
             </CardTitle>
-            <CardDescription>
-              現在のシステム構成を確認できます
-            </CardDescription>
+            <CardDescription>現在のシステム構成</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1">
-                <Label className="text-muted-foreground">バージョン</Label>
+                <Label className="text-muted-foreground">アプリケーション</Label>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">Policy Manager v1.0.0</span>
-                  <Badge variant="secondary">Stable</Badge>
+                  <span className="font-medium">Policy Manager v2.0</span>
+                  <Badge variant="default">本番</Badge>
                 </div>
               </div>
               <div className="space-y-1">
-                <Label className="text-muted-foreground">環境</Label>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">Production</span>
-                  <Badge variant="default">本番</Badge>
-                </div>
+                <Label className="text-muted-foreground">フレームワーク</Label>
+                <span className="font-medium">Next.js 16 / React 19</span>
               </div>
               <div className="space-y-1">
                 <Label className="text-muted-foreground">データベース</Label>
                 <span className="font-medium">PostgreSQL + pgvector</span>
               </div>
               <div className="space-y-1">
-                <Label className="text-muted-foreground">AI モデル</Label>
-                <span className="font-medium">Claude API</span>
+                <Label className="text-muted-foreground">認証</Label>
+                <span className="font-medium">NextAuth.js (JWT)</span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* セキュリティ設定 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5" />
-              セキュリティ設定
-            </CardTitle>
-            <CardDescription>
-              認証とセキュリティの設定を管理します
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="session-timeout">セッションタイムアウト（分）</Label>
-                <Input
-                  id="session-timeout"
-                  type="number"
-                  defaultValue="60"
-                  min="5"
-                  max="1440"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="max-login-attempts">最大ログイン試行回数</Label>
-                <Input
-                  id="max-login-attempts"
-                  type="number"
-                  defaultValue="5"
-                  min="3"
-                  max="10"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lockout-duration">アカウントロック時間（分）</Label>
-                <Input
-                  id="lockout-duration"
-                  type="number"
-                  defaultValue="30"
-                  min="5"
-                  max="1440"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="min-password-length">最小パスワード長</Label>
-                <Input
-                  id="min-password-length"
-                  type="number"
-                  defaultValue="8"
-                  min="6"
-                  max="32"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 通知設定 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" />
-              通知設定
-            </CardTitle>
-            <CardDescription>
-              メール通知の設定を管理します
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="smtp-host">SMTPサーバー</Label>
-                <Input
-                  id="smtp-host"
-                  type="text"
-                  placeholder="smtp.example.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="smtp-port">ポート</Label>
-                <Input
-                  id="smtp-port"
-                  type="number"
-                  defaultValue="587"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="smtp-user">ユーザー名</Label>
-                <Input
-                  id="smtp-user"
-                  type="text"
-                  placeholder="user@example.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="from-email">送信元メールアドレス</Label>
-                <Input
-                  id="from-email"
-                  type="email"
-                  placeholder="noreply@example.com"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 外部連携 */}
+        {/* Claude API連携 */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5" />
-              外部連携
+              Claude API 連携
             </CardTitle>
             <CardDescription>
-              外部サービスとの連携を設定します
+              AIによるQ&A対話、文案生成、矛盾チェックに使用するAPIの設定
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Claude API</Label>
-                <div className="flex items-center gap-2">
-                  <Badge variant="default" className="bg-green-500">接続済み</Badge>
-                  <span className="text-sm text-muted-foreground">claude-3-5-sonnet</span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>OpenAI API</Label>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">未設定</Badge>
-                  <span className="text-sm text-muted-foreground">オプション</span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>SSO (SAML)</Label>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">未設定</Badge>
-                  <span className="text-sm text-muted-foreground">オプション</span>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Slack通知</Label>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">未設定</Badge>
-                  <span className="text-sm text-muted-foreground">オプション</span>
-                </div>
-              </div>
+          <CardContent className="space-y-6">
+            {/* 接続状態 */}
+            <div className="flex items-center gap-2">
+              <Label className="text-muted-foreground">接続状態:</Label>
+              {apiKeySet ? (
+                <Badge variant="default" className="bg-green-600">接続済み</Badge>
+              ) : (
+                <Badge variant="destructive">未設定</Badge>
+              )}
             </div>
-          </CardContent>
-        </Card>
 
-        {/* データ管理 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Database className="h-5 w-5" />
-              データ管理
-            </CardTitle>
-            <CardDescription>
-              データのバックアップとメンテナンス
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-4">
-              <Button variant="outline">
-                データをエクスポート
-              </Button>
-              <Button variant="outline">
-                埋め込みを再生成
-              </Button>
-              <Button variant="outline">
-                キャッシュをクリア
-              </Button>
-              <Button variant="outline" className="text-destructive">
-                監査ログを削除
-              </Button>
+            {/* APIキー */}
+            <div className="space-y-2">
+              <Label htmlFor="api-key">API Key</Label>
+              {apiKeySet && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>現在の設定値: {apiKeyDisplay}</span>
+                </div>
+              )}
+              <div className="relative">
+                <Input
+                  id="api-key"
+                  type={showApiKey ? "text" : "password"}
+                  value={newApiKey}
+                  onChange={(e) => setNewApiKey(e.target.value)}
+                  placeholder={apiKeySet ? "変更する場合のみ入力..." : "sk-ant-api03-..."}
+                  className="pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Anthropic Console から取得したAPIキーを入力してください
+              </p>
+            </div>
+
+            {/* モデル選択 */}
+            <div className="space-y-2">
+              <Label>使用モデル</Label>
+              <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <SelectTrigger className="w-72">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MODEL_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      <span>{opt.label}</span>
+                      <span className="ml-2 text-muted-foreground text-xs">({opt.description})</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Q&A・文案生成・矛盾チェック等で使用するモデルを選択
+              </p>
             </div>
           </CardContent>
         </Card>
 
         {/* 保存ボタン */}
         <div className="flex justify-end">
-          <Button onClick={handleSave}>
-            <Settings className="mr-2 h-4 w-4" />
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? (
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle className="mr-2 h-4 w-4" />
+            )}
             設定を保存
           </Button>
         </div>

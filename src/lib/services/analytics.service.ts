@@ -97,14 +97,14 @@ export class AnalyticsService {
       }),
 
       // 日別統計
-      prisma.$queryRaw<Array<{ date: string; action: string; count: bigint }>>`
+      prisma.$queryRaw<Array<{ date: Date | string; action: string; count: bigint }>>`
         SELECT
-          DATE(created_at) as date,
+          DATE("createdAt") as date,
           action,
           COUNT(*) as count
         FROM access_logs
-        WHERE created_at >= ${startDate} AND created_at <= ${endDate}
-        GROUP BY DATE(created_at), action
+        WHERE "createdAt" >= ${startDate} AND "createdAt" <= ${endDate}
+        GROUP BY DATE("createdAt"), action
         ORDER BY date DESC
       `,
     ]);
@@ -129,14 +129,17 @@ export class AnalyticsService {
       }
     });
 
-    // 日別統計を整形
+    // 日別統計を整形（$queryRawのDATE()はDateオブジェクトを返すため文字列に変換）
     const dailyMap = new Map<string, { views: number; searches: number; qaQuestions: number }>();
     dailyStatsRaw.forEach((row) => {
-      const existing = dailyMap.get(row.date) || { views: 0, searches: 0, qaQuestions: 0 };
+      const dateStr = row.date instanceof Date
+        ? row.date.toISOString().split("T")[0]
+        : String(row.date);
+      const existing = dailyMap.get(dateStr) || { views: 0, searches: 0, qaQuestions: 0 };
       if (row.action === "view") existing.views = Number(row.count);
       else if (row.action === "search") existing.searches = Number(row.count);
       else if (row.action === "qa_ask") existing.qaQuestions = Number(row.count);
-      dailyMap.set(row.date, existing);
+      dailyMap.set(dateStr, existing);
     });
 
     return {

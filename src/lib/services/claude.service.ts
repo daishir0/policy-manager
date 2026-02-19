@@ -1,4 +1,5 @@
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+import { settingsService } from "./settings.service";
+
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000;
@@ -13,8 +14,17 @@ export const AVAILABLE_MODELS = {
 
 export type ModelKey = keyof typeof AVAILABLE_MODELS;
 
-// デフォルトモデル（環境変数で上書き可能）
-const DEFAULT_MODEL = process.env.CLAUDE_MODEL || "haiku";
+// APIキーを動的に取得（DB優先 → 環境変数フォールバック）
+async function getApiKey(): Promise<string> {
+  const dbKey = await settingsService.get("ANTHROPIC_API_KEY").catch(() => null);
+  return dbKey || process.env.ANTHROPIC_API_KEY || "";
+}
+
+// デフォルトモデルを動的に取得
+async function getDefaultModel(): Promise<string> {
+  const dbModel = await settingsService.get("CLAUDE_MODEL").catch(() => null);
+  return dbModel || process.env.CLAUDE_MODEL || "haiku";
+}
 
 export interface Message {
   role: "user" | "assistant";
@@ -38,8 +48,8 @@ export class ClaudeService {
   }
 
   // モデルIDを取得
-  private getModelId(modelKey?: ModelKey | string): string {
-    const key = modelKey || DEFAULT_MODEL;
+  private async getModelId(modelKey?: ModelKey | string): Promise<string> {
+    const key = modelKey || await getDefaultModel();
     if (key in AVAILABLE_MODELS) {
       return AVAILABLE_MODELS[key as ModelKey];
     }
@@ -57,12 +67,13 @@ export class ClaudeService {
       model?: ModelKey | string;
     } = {}
   ): Promise<ClaudeResponse> {
-    if (!ANTHROPIC_API_KEY) {
+    const apiKey = await getApiKey();
+    if (!apiKey) {
       throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
     const { systemPrompt, maxTokens = 4096, temperature = 0.7, model } = options;
-    const modelId = this.getModelId(model);
+    const modelId = await this.getModelId(model);
 
     let lastError: Error | null = null;
 
@@ -72,7 +83,7 @@ export class ClaudeService {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": ANTHROPIC_API_KEY,
+            "x-api-key": apiKey,
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
@@ -132,18 +143,19 @@ export class ClaudeService {
       model?: ModelKey | string;
     } = {}
   ): AsyncGenerator<string> {
-    if (!ANTHROPIC_API_KEY) {
+    const apiKey = await getApiKey();
+    if (!apiKey) {
       throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
     const { systemPrompt, maxTokens = 4096, temperature = 0.7, model } = options;
-    const modelId = this.getModelId(model);
+    const modelId = await this.getModelId(model);
 
     const response = await fetch(ANTHROPIC_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": ANTHROPIC_API_KEY,
+        "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({

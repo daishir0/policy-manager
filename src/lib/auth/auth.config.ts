@@ -30,6 +30,15 @@ export const authConfig: NextAuthConfig = {
       const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
       const isOnAdmin = nextUrl.pathname.startsWith("/admin");
       const isOnLogin = nextUrl.pathname === "/login";
+      const isOnRoot = nextUrl.pathname === "/";
+
+      // トップページ: 未ログインなら/login、ログイン済みなら/adminへ
+      if (isOnRoot) {
+        if (isLoggedIn) {
+          return Response.redirect(new URL("/admin", nextUrl));
+        }
+        return Response.redirect(new URL("/login", nextUrl));
+      }
 
       // ログインページは未認証でもアクセス可能
       if (isOnLogin) {
@@ -42,7 +51,6 @@ export const authConfig: NextAuthConfig = {
       // ダッシュボードと管理画面は認証必須
       if (isOnDashboard || isOnAdmin) {
         if (isLoggedIn) {
-          // 管理画面はADMIN/STAFFどちらでもアクセス可
           return true;
         }
         return false; // リダイレクト to login

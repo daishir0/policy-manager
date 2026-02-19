@@ -41,6 +41,7 @@ export interface AuditLogFilter {
   userId?: string;
   action?: AuditAction;
   entityType?: string;
+  keyword?: string;
   startDate?: Date;
   endDate?: Date;
   page?: number;
@@ -62,10 +63,25 @@ export class AuditService {
   }
 
   async listLogs(filter: AuditLogFilter = {}) {
-    const { userId, action, entityType, startDate, endDate, page = 1, limit = 50 } = filter;
+    const { userId, action, entityType, keyword, startDate, endDate, page = 1, limit = 50 } = filter;
     const skip = (page - 1) * limit;
 
-    const where = {
+    // キーワードでユーザー名/メール部分一致検索
+    let keywordUserIds: string[] = [];
+    if (keyword) {
+      const matchingUsers = await prisma.user.findMany({
+        where: {
+          OR: [
+            { name: { contains: keyword, mode: "insensitive" } },
+            { email: { contains: keyword, mode: "insensitive" } },
+          ],
+        },
+        select: { id: true },
+      });
+      keywordUserIds = matchingUsers.map((u) => u.id);
+    }
+
+    const where: Prisma.AuditLogWhereInput = {
       ...(userId && { userId }),
       ...(action && { action }),
       ...(entityType && { entityType }),
@@ -75,6 +91,15 @@ export class AuditService {
               ...(startDate && { gte: startDate }),
               ...(endDate && { lte: endDate }),
             },
+          }
+        : {}),
+      ...(keyword
+        ? {
+            OR: [
+              ...(keywordUserIds.length > 0 ? [{ userId: { in: keywordUserIds } }] : []),
+              { details: { path: ["title"], string_contains: keyword } },
+              { details: { path: ["question"], string_contains: keyword } },
+            ],
           }
         : {}),
     };

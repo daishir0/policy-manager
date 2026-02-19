@@ -38,6 +38,9 @@ export const PERMISSIONS = {
 
   // 監査
   AUDIT_VIEW: "audit:view",
+
+  // 設定
+  SETTINGS_VIEW: "settings:view",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

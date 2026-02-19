@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { documentService } from "@/lib/services/document.service";
 import { auditService } from "@/lib/services/audit.service";
+import { analyticsService } from "@/lib/services/analytics.service";
 import { aiService } from "@/lib/services/ai.service";
 import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
 
@@ -22,7 +23,7 @@ export async function GET(
     const { id } = await params;
     const document = await documentService.getDocument(id);
 
-    // 文書閲覧ログを記録
+    // 文書閲覧ログを記録（監査ログ + アクセスログ）
     auditService.log({
       userId: session.user.id,
       action: "document_view",
@@ -31,6 +32,15 @@ export async function GET(
       details: { title: document.title },
       ipAddress: request.headers.get("x-forwarded-for") || undefined,
     }).catch((err) => console.error("Failed to log document view:", err));
+
+    analyticsService.logAccess(
+      session.user.id,
+      "view",
+      id,
+      { title: document.title },
+      request.headers.get("x-forwarded-for") || undefined,
+      request.headers.get("user-agent") || undefined,
+    ).catch((err) => console.error("Failed to log access:", err));
 
     return NextResponse.json(document);
   } catch (error) {

@@ -14,12 +14,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ClipboardList, RefreshCw, Search, X } from "lucide-react";
+import { ClipboardList, RefreshCw, Search, X, Calendar } from "lucide-react";
 import { toast } from "sonner";
 
 interface AuditLog {
   id: string;
   userId: string | null;
+  userName: string | null;
   action: string;
   entityType: string | null;
   entityId: string | null;
@@ -37,6 +38,21 @@ interface LogsResponse {
     totalPages: number;
   };
 }
+
+interface UserOption {
+  id: string;
+  name: string | null;
+  email: string;
+}
+
+type DatePreset = "today" | "7days" | "30days" | "all";
+
+const DATE_PRESETS: { value: DatePreset; label: string }[] = [
+  { value: "today", label: "今日" },
+  { value: "7days", label: "7日間" },
+  { value: "30days", label: "30日間" },
+  { value: "all", label: "全期間" },
+];
 
 const ACTION_LABELS: Record<string, string> = {
   login: "ログイン",
@@ -76,9 +92,13 @@ export default function LogsPage() {
   const router = useRouter();
   const [data, setData] = useState<LogsResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userSearch, setUserSearch] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [activeKeyword, setActiveKeyword] = useState("");
+  const [userFilter, setUserFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
+  const [datePreset, setDatePreset] = useState<DatePreset>("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [users, setUsers] = useState<UserOption[]>([]);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -87,13 +107,39 @@ export default function LogsPage() {
     }
   }, [session, status, router]);
 
+  // ユーザー一覧を取得（ドロップダウン用）
+  useEffect(() => {
+    if (!session || session.user.role !== "ADMIN") return;
+    fetch("/api/users?limit=100")
+      .then((res) => res.json())
+      .then((result) => {
+        setUsers(result.users || []);
+      })
+      .catch(() => {});
+  }, [session]);
+
   const fetchLogs = useCallback(async () => {
     if (!session || session.user.role !== "ADMIN") return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (userSearch) params.set("userId", userSearch);
+      if (activeKeyword) params.set("keyword", activeKeyword);
+      if (userFilter) params.set("userId", userFilter);
       if (actionFilter) params.set("action", actionFilter);
+
+      if (datePreset !== "all") {
+        const now = new Date();
+        let startDate: Date;
+        if (datePreset === "today") {
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        } else if (datePreset === "7days") {
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        } else {
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        }
+        params.set("startDate", startDate.toISOString());
+      }
+
       params.set("page", String(currentPage));
       params.set("limit", "50");
 
@@ -106,11 +152,22 @@ export default function LogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [session, userSearch, actionFilter, currentPage]);
+  }, [session, activeKeyword, userFilter, actionFilter, datePreset, currentPage]);
 
   useEffect(() => {
     fetchLogs();
   }, [fetchLogs]);
+
+  const applyKeyword = () => {
+    setActiveKeyword(keyword);
+    setCurrentPage(1);
+  };
+
+  const clearKeyword = () => {
+    setKeyword("");
+    setActiveKeyword("");
+    setCurrentPage(1);
+  };
 
   if (status === "loading" || (session && session.user.role !== "ADMIN")) {
     return (
@@ -142,38 +199,85 @@ export default function LogsPage() {
 
       {/* フィルター */}
       <Card>
-        <CardContent className="pt-4">
+        <CardContent className="pt-4 space-y-3">
+          {/* Row 1: キーワード検索 + ドロップダウン */}
           <div className="flex gap-2 flex-wrap">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="ユーザーIDで絞り込み..."
-                value={userSearch}
-                onChange={(e) => setUserSearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && fetchLogs()}
+                placeholder="ユーザー名・文書名・質問内容で検索..."
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && applyKeyword()}
                 className="pl-9"
               />
-              {userSearch && (
+              {keyword && (
                 <button
-                  onClick={() => setUserSearch("")}
+                  onClick={clearKeyword}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-4 w-4" />
                 </button>
               )}
             </div>
-            <Select value={actionFilter || "all"} onValueChange={(v) => setActionFilter(v === "all" ? "" : v)}>
+            <Select
+              value={userFilter || "all"}
+              onValueChange={(v) => {
+                setUserFilter(v === "all" ? "" : v);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="ユーザー" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全ユーザー</SelectItem>
+                {users.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.name || u.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={actionFilter || "all"}
+              onValueChange={(v) => {
+                setActionFilter(v === "all" ? "" : v);
+                setCurrentPage(1);
+              }}
+            >
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="アクション種別" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">全て</SelectItem>
+                <SelectItem value="all">全アクション</SelectItem>
                 {Object.entries(ACTION_LABELS).map(([key, label]) => (
                   <SelectItem key={key} value={key}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={fetchLogs} variant="secondary">絞り込み</Button>
+            <Button onClick={applyKeyword} variant="secondary">検索</Button>
+          </div>
+
+          {/* Row 2: 日付プリセット */}
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">期間:</span>
+            <div className="flex gap-1">
+              {DATE_PRESETS.map((preset) => (
+                <Button
+                  key={preset.value}
+                  variant={datePreset === preset.value ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setDatePreset(preset.value);
+                    setCurrentPage(1);
+                  }}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -203,7 +307,7 @@ export default function LogsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       {log.userId && (
-                        <span className="text-muted-foreground text-xs">UID: {log.userId.slice(0, 8)}...</span>
+                        <span className="text-muted-foreground text-xs">{log.userName || log.userId.slice(0, 8) + "..."}</span>
                       )}
                       {log.entityType && log.entityId && (
                         <span className="text-muted-foreground text-xs">
