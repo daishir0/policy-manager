@@ -42,13 +42,7 @@ export const authConfig: NextAuthConfig = {
       // ダッシュボードと管理画面は認証必須
       if (isOnDashboard || isOnAdmin) {
         if (isLoggedIn) {
-          // 管理画面は管理者ロールのみ
-          if (isOnAdmin) {
-            const role = auth?.user?.role;
-            if (role !== "system_admin" && role !== "document_admin") {
-              return Response.redirect(new URL("/admin", nextUrl));
-            }
-          }
+          // 管理画面はADMIN/STAFFどちらでもアクセス可
           return true;
         }
         return false; // リダイレクト to login

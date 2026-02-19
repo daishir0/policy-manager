@@ -4,8 +4,6 @@ import { DocumentStatus } from "@prisma/client";
 
 export interface SearchFilter {
   query: string;
-  categoryId?: string;
-  organizationId?: string;
   status?: DocumentStatus;
   page?: number;
   limit?: number;
@@ -18,12 +16,9 @@ export interface SearchResult {
     id: string;
     title: string;
     content: string;
-    summary: string | null;
     status: DocumentStatus;
     currentVersion: string;
-    effectiveDate: Date | null;
     updatedAt: Date;
-    categories: Array<{ id: string; name: string }>;
     relevanceScore?: number;
   }>;
   pagination: {
@@ -39,8 +34,6 @@ export class SearchService {
   async search(filter: SearchFilter): Promise<SearchResult> {
     const {
       query,
-      categoryId,
-      organizationId,
       status,
       page = 1,
       limit = 20,
@@ -58,11 +51,8 @@ export class SearchService {
         OR: [
           { title: { contains: query, mode: "insensitive" as const } },
           { content: { contains: query, mode: "insensitive" as const } },
-          { summary: { contains: query, mode: "insensitive" as const } },
         ],
       }),
-      ...(categoryId && { categories: { some: { categoryId } } }),
-      ...(organizationId && { organizations: { some: { organizationId } } }),
     };
 
     // ベクトル検索も実行
@@ -77,18 +67,13 @@ export class SearchService {
     }
 
     // 並び替え
-    const orderBy = sortBy === "relevance"
-      ? [{ updatedAt: sortOrder as "asc" | "desc" }]
-      : sortBy === "title"
+    const orderBy = sortBy === "title"
       ? [{ title: sortOrder as "asc" | "desc" }]
       : [{ updatedAt: sortOrder as "asc" | "desc" }];
 
     const [documents, total] = await Promise.all([
       prisma.document.findMany({
         where,
-        include: {
-          categories: { include: { category: { select: { id: true, name: true } } } },
-        },
         orderBy,
         skip,
         take: limit * 2, // ベクトル検索結果とマージするため多めに取得
@@ -101,12 +86,9 @@ export class SearchService {
       id: doc.id,
       title: doc.title,
       content: doc.content.substring(0, 300) + (doc.content.length > 300 ? "..." : ""),
-      summary: doc.summary,
       status: doc.status,
       currentVersion: doc.currentVersion,
-      effectiveDate: doc.effectiveDate,
       updatedAt: doc.updatedAt,
-      categories: doc.categories.map((dc) => dc.category),
       relevanceScore: vectorResults.get(doc.id) || 0,
     }));
 

@@ -9,12 +9,11 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Send,
-  ThumbsUp,
-  ThumbsDown,
   ExternalLink,
   Bot,
   User,
   Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 interface Source {
@@ -30,7 +29,6 @@ interface Message {
   content: string;
   sources?: Source[];
   confidence?: number;
-  feedbackRating?: number;
   timestamp: Date;
 }
 
@@ -122,27 +120,6 @@ export function ChatInterface({
     }
   };
 
-  const handleFeedback = async (messageId: string, rating: number) => {
-    try {
-      await fetch("/api/ai/qa/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          interactionId: messageId,
-          rating,
-        }),
-      });
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId ? { ...msg, feedbackRating: rating } : msg
-        )
-      );
-    } catch (error) {
-      console.error("Feedback error:", error);
-    }
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -195,7 +172,12 @@ export function ChatInterface({
 
                     {message.sources && message.sources.length > 0 && (
                       <div className="mt-3 pt-3 border-t border-border/50">
-                        <p className="text-xs font-medium mb-2">参照文書:</p>
+                        <div className="flex items-start gap-1.5 mb-2 p-2 rounded bg-muted/50">
+                          <AlertCircle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-amber-500" />
+                          <p className="text-xs text-muted-foreground">
+                            AIの回答は参考までにしましょう。正確には以下の文書などを確認してご判断されてください。
+                          </p>
+                        </div>
                         <div className="space-y-1">
                           {message.sources.map((source, index) => (
                             <a
@@ -207,59 +189,13 @@ export function ChatInterface({
                             >
                               <ExternalLink className="h-3 w-3" />
                               {source.documentTitle}
-                              {source.score && (
-                                <Badge variant="secondary" className="ml-1 text-xs">
-                                  {Math.round(source.score * 100)}%
-                                </Badge>
-                              )}
                             </a>
                           ))}
                         </div>
                       </div>
                     )}
-
-                    {message.confidence !== undefined && (
-                      <div className="mt-2">
-                        <Badge
-                          variant={
-                            message.confidence > 0.7
-                              ? "default"
-                              : message.confidence > 0.4
-                              ? "secondary"
-                              : "outline"
-                          }
-                          className="text-xs"
-                        >
-                          信頼度: {Math.round(message.confidence * 100)}%
-                        </Badge>
-                      </div>
-                    )}
                   </CardContent>
                 </Card>
-
-                {message.role === "assistant" && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="text-xs text-muted-foreground">
-                      この回答は役に立ちましたか？
-                    </span>
-                    <Button
-                      variant={message.feedbackRating === 5 ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-6 w-6 p-0"
-                      onClick={() => handleFeedback(message.id, 5)}
-                    >
-                      <ThumbsUp className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant={message.feedbackRating === 1 ? "secondary" : "ghost"}
-                      size="sm"
-                      className="h-6 w-6 p-0"
-                      onClick={() => handleFeedback(message.id, 1)}
-                    >
-                      <ThumbsDown className="h-3 w-3" />
-                    </Button>
-                  </div>
-                )}
 
                 <p className="text-xs text-muted-foreground mt-1">
                   {message.timestamp.toLocaleTimeString("ja-JP", {

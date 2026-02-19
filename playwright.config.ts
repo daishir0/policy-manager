@@ -18,6 +18,7 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
+    permissions: ["clipboard-read", "clipboard-write"],
   },
   projects: [
     {

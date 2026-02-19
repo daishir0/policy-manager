@@ -19,10 +19,7 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const body = await request.json().catch(() => ({}));
-    const expirationDate = body.expirationDate ? new Date(body.expirationDate) : undefined;
-
-    const document = await documentService.retireDocument(id, session.user.id, expirationDate);
+    const document = await documentService.retireDocument(id, session.user.id);
 
     await auditService.log({
       userId: session.user.id,

@@ -16,228 +16,695 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("Seeding database...");
 
-  // ロールの作成
-  const roles = [
-    {
-      name: "system_admin",
-      displayName: "システム管理者",
-      description: "システム全体の管理権限を持つ",
-      permissions: [
-        "user:create", "user:read", "user:update", "user:delete", "role:manage",
-        "document:create", "document:read", "document:update", "document:delete", "document:publish",
-        "category:manage", "organization:manage",
-        "ai:contradiction_check", "ai:draft_generate", "ai:qa",
-        "analytics:view", "proposal:manage", "audit:view",
-      ],
-    },
-    {
-      name: "document_admin",
-      displayName: "文書管理者",
-      description: "文書の作成・編集・公開権限を持つ",
-      permissions: [
-        "user:read",
-        "document:create", "document:read", "document:update", "document:delete", "document:publish",
-        "category:manage", "organization:manage",
-        "ai:contradiction_check", "ai:draft_generate", "ai:qa",
-        "analytics:view", "proposal:manage",
-      ],
-    },
-    {
-      name: "employee",
-      displayName: "一般従業員",
-      description: "文書の閲覧とQ&A利用が可能",
-      permissions: ["document:read", "ai:qa"],
-    },
-  ];
-
-  for (const role of roles) {
-    await prisma.role.upsert({
-      where: { name: role.name },
-      update: {
-        displayName: role.displayName,
-        description: role.description,
-        permissions: role.permissions,
-      },
-      create: role,
-    });
-    console.log(`Role created/updated: ${role.name}`);
-  }
-
-  // 管理者ユーザーの作成（初期ユーザー）
-  const adminRole = await prisma.role.findUnique({
-    where: { name: "system_admin" },
-  });
-
-  if (adminRole) {
-    const adminPassword = await bcrypt.hash("password123", 12);
-    await prisma.user.upsert({
-      where: { email: "admin@example.com" },
-      update: { password: adminPassword },
-      create: {
-        email: "admin@example.com",
-        name: "システム管理者",
-        password: adminPassword,
-        roleId: adminRole.id,
-      },
-    });
-    console.log("Admin user created/updated: admin@example.com");
-  }
-
-  // ロックテスト用ユーザーの作成
-  const employeeRole = await prisma.role.findUnique({
-    where: { name: "employee" },
-  });
-
-  if (employeeRole) {
-    const lockTestPassword = await bcrypt.hash("testpassword", 12);
-    await prisma.user.upsert({
-      where: { email: "locktest@example.com" },
-      update: { password: lockTestPassword },
-      create: {
-        email: "locktest@example.com",
-        name: "ロックテストユーザー",
-        password: lockTestPassword,
-        roleId: employeeRole.id,
-      },
-    });
-    console.log("Lock test user created/updated: locktest@example.com");
-  }
-
-  // デフォルトカテゴリの作成
-  const categories = [
-    { name: "通達", description: "社内通達文書" },
-    { name: "方針書", description: "会社方針に関する文書" },
-    { name: "事業計画書", description: "事業計画に関する文書" },
-    { name: "ハンドブック", description: "業務ハンドブック" },
-    { name: "マニュアル", description: "業務マニュアル" },
-    { name: "規程", description: "社内規程" },
-  ];
-
-  for (const [index, category] of categories.entries()) {
-    await prisma.category.upsert({
-      where: { id: `default-category-${index + 1}` },
-      update: category,
-      create: {
-        id: `default-category-${index + 1}`,
-        ...category,
-        sortOrder: index,
-      },
-    });
-    console.log(`Category created/updated: ${category.name}`);
-  }
-
-  // デフォルト組織の作成
-  const organizations = [
-    { id: "org-1", code: "HQ", name: "本社", parentId: null },
-    { id: "org-2", code: "HR", name: "人事部", parentId: "org-1" },
-    { id: "org-3", code: "DEV", name: "開発部", parentId: "org-1" },
-    { id: "org-4", code: "SALES", name: "営業部", parentId: "org-1" },
-    { id: "org-5", code: "ADMIN", name: "総務部", parentId: "org-1" },
-  ];
-
-  for (const [index, org] of organizations.entries()) {
-    await prisma.organization.upsert({
-      where: { id: org.id },
-      update: { name: org.name, code: org.code, parentId: org.parentId },
-      create: {
-        ...org,
-        sortOrder: index,
-      },
-    });
-    console.log(`Organization created/updated: ${org.name}`);
-  }
-
-  // サンプル文書の作成
-  const adminUser = await prisma.user.findUnique({
+  // 管理者ユーザーの作成
+  const adminPassword = await bcrypt.hash("password123", 12);
+  const admin = await prisma.user.upsert({
     where: { email: "admin@example.com" },
+    update: { password: adminPassword, role: "ADMIN" },
+    create: {
+      email: "admin@example.com",
+      name: "管理者",
+      password: adminPassword,
+      role: "ADMIN",
+    },
   });
+  console.log("Admin user created/updated:", admin.email);
 
-  if (adminUser) {
-    const sampleDocuments = [
-      {
-        id: "doc-1",
-        title: "情報セキュリティポリシー",
-        content: "# 情報セキュリティポリシー\n\n## 目的\n本ポリシーは、当社における情報セキュリティの基本方針を定めるものです。\n\n## 適用範囲\n本ポリシーは、当社の全従業員に適用されます。\n\n## 基本方針\n1. 情報資産の適切な管理\n2. アクセス権限の管理\n3. セキュリティインシデントへの対応",
-        summary: "当社の情報セキュリティに関する基本方針を定めた文書です。",
-        status: "PUBLISHED" as const,
-        categoryId: "default-category-6", // 規程
-        organizationId: "org-1",
-      },
-      {
-        id: "doc-2",
-        title: "テレワーク勤務規程",
-        content: "# テレワーク勤務規程\n\n## 目的\n本規程は、テレワーク勤務に関する取り扱いを定めるものです。\n\n## 対象者\n会社が認めた従業員\n\n## 勤務時間\n通常勤務と同様の時間帯とする\n\n## 費用負担\n通信費は会社が負担する",
-        summary: "テレワーク勤務に関する規程です。",
-        status: "PUBLISHED" as const,
-        categoryId: "default-category-6", // 規程
-        organizationId: "org-2",
-      },
-      {
-        id: "doc-3",
-        title: "新入社員向けハンドブック",
-        content: "# 新入社員向けハンドブック\n\n## はじめに\n入社おめでとうございます。このハンドブックでは、当社で働く上で知っておくべき基本事項を説明します。\n\n## 勤務時間\n9:00〜18:00（休憩1時間）\n\n## 休暇制度\n- 年次有給休暇\n- 特別休暇\n- 産前産後休暇",
-        summary: "新入社員向けの基本事項をまとめたハンドブックです。",
-        status: "PUBLISHED" as const,
-        categoryId: "default-category-4", // ハンドブック
-        organizationId: "org-2",
-      },
-      {
-        id: "doc-4",
-        title: "経費精算マニュアル",
-        content: "# 経費精算マニュアル\n\n## 概要\n本マニュアルは、経費精算の手続きを説明します。\n\n## 対象経費\n- 交通費\n- 出張費\n- 消耗品費\n\n## 精算手順\n1. 経費精算システムにログイン\n2. 必要事項を入力\n3. 領収書を添付\n4. 上長承認を依頼",
-        summary: "経費精算の手続きを説明したマニュアルです。",
-        status: "PUBLISHED" as const,
-        categoryId: "default-category-5", // マニュアル
-        organizationId: "org-5",
-      },
-      {
-        id: "doc-5",
-        title: "2024年度事業計画",
-        content: "# 2024年度事業計画\n\n## 事業目標\n売上高：前年比120%\n\n## 重点施策\n1. 新規顧客開拓\n2. 既存顧客深耕\n3. 新製品開発\n\n## 投資計画\n- システム投資：5000万円\n- 人材投資：3000万円",
-        summary: "2024年度の事業計画書です。",
-        status: "DRAFT" as const,
-        categoryId: "default-category-3", // 事業計画書
-        organizationId: "org-1",
-      },
-    ];
+  // スタッフユーザーの作成
+  const staffPassword = await bcrypt.hash("password123", 12);
+  const staff = await prisma.user.upsert({
+    where: { email: "staff01@example.com" },
+    update: { password: staffPassword, role: "STAFF" },
+    create: {
+      email: "staff01@example.com",
+      name: "スタッフ01",
+      password: staffPassword,
+      role: "STAFF",
+    },
+  });
+  console.log("Staff user created/updated:", staff.email);
 
-    for (const doc of sampleDocuments) {
-      const existing = await prisma.document.findUnique({ where: { id: doc.id } });
-      if (!existing) {
-        await prisma.document.create({
-          data: {
-            id: doc.id,
-            title: doc.title,
-            content: doc.content,
-            summary: doc.summary,
-            status: doc.status,
-            currentVersion: "1.0",
-            effectiveDate: doc.status === "PUBLISHED" ? new Date() : null,
-            createdById: adminUser.id,
-          },
-        });
+  // 11文書の作成
+  const documents = [
+    {
+      id: "doc-1",
+      title: "経営計画書",
+      content: `# 経営計画書
 
-        // カテゴリとの関連付け
-        await prisma.documentCategory.create({
-          data: {
-            documentId: doc.id,
-            categoryId: doc.categoryId,
-          },
-        });
+## 1. 経営理念
 
-        // 組織との関連付け
-        await prisma.documentOrganization.create({
-          data: {
-            documentId: doc.id,
-            organizationId: doc.organizationId,
-          },
-        });
+当社は「技術とデザインで社会に貢献する」を理念として、高品質なウェブ制作・システム開発サービスを提供します。
 
-        console.log(`Document created: ${doc.title}`);
-      } else {
-        console.log(`Document already exists: ${doc.title}`);
-      }
+## 2. 経営方針
+
+- **顧客第一主義**: お客様のビジネス成長を最優先に考えたソリューションを提供する
+- **品質管理**: ISO準拠の品質マネジメントシステムにより、一定の品質水準を維持する
+- **人材育成**: 社員一人ひとりのスキルアップを支援し、組織全体の能力を向上させる
+- **コンプライアンス**: 法令・社内規程を遵守し、健全な企業運営を行う
+
+## 3. 中期経営目標（3カ年）
+
+| 年度 | 売上目標 | 利益率 |
+|------|--------|--------|
+| 1年目 | 5億円 | 15% |
+| 2年目 | 7億円 | 18% |
+| 3年目 | 10億円 | 20% |
+
+## 4. 重点施策
+
+### 4.1 事業拡大
+- 新規事業領域（AI・DX支援）への進出
+- 既存顧客へのクロスセル強化
+
+### 4.2 組織強化
+- 採用計画の実行（年間10名）
+- 社内教育プログラムの整備
+
+### 4.3 基盤整備
+- ITインフラの刷新
+- セキュリティ体制の強化
+
+## 5. 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+    {
+      id: "doc-2",
+      title: "事業計画書（ウェブ制作事業部）",
+      content: `# 事業計画書（ウェブ制作事業部）
+
+## 1. 事業概要
+
+ウェブ制作事業部は、企業向けウェブサイト制作・リニューアル、ECサイト構築、ウェブアプリケーション開発を主な事業とします。
+
+## 2. 事業目標
+
+本計画は、経営計画書に定める経営方針に基づき策定します。
+
+### 年度目標
+- 売上高: 2億5千万円
+- 新規顧客獲得: 20社
+- 顧客満足度: 90%以上
+
+## 3. 主要サービスライン
+
+### 3.1 コーポレートサイト制作
+- 中小企業向けスタンダードプラン
+- 大企業向けエンタープライズプラン
+
+### 3.2 ECサイト構築
+- Shopify/WooCommerceを活用した短期導入プラン
+- フルスクラッチ開発プラン
+
+### 3.3 ウェブアプリ開発
+- 業務効率化ツール
+- 顧客向けポータルサイト
+
+## 4. 人員計画
+
+| 職種 | 現員 | 採用計画 |
+|------|------|--------|
+| ディレクター | 3名 | 2名 |
+| デザイナー | 4名 | 1名 |
+| エンジニア | 5名 | 3名 |
+
+## 5. 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+    {
+      id: "doc-3",
+      title: "商品設計書（更新サービス）",
+      content: `# 商品設計書（更新サービス）
+
+## 1. 商品概要
+
+ウェブサイト定期更新サービスは、お客様のウェブサイトのコンテンツ更新・保守を月額固定料金で提供するサービスです。
+
+## 2. サービス仕様
+
+### 2.1 ライトプラン（月額3万円）
+- コンテンツ更新: 月5回まで
+- バナー制作: 月2点まで
+- 対応時間: 平日10:00〜18:00
+
+### 2.2 スタンダードプラン（月額8万円）
+- コンテンツ更新: 月15回まで
+- バナー制作: 月5点まで
+- 軽微なプログラム修正
+- 対応時間: 平日9:00〜19:00
+
+### 2.3 プレミアムプラン（月額15万円）
+- コンテンツ更新: 無制限
+- バナー・デザイン制作: 月10点まで
+- プログラム修正（工数2時間以内）
+- 24時間365日緊急対応
+
+## 3. サービス提供フロー
+
+1. お客様からの更新依頼受信
+2. 内容確認・工数見積もり
+3. 作業実施
+4. 確認依頼
+5. 公開
+
+## 4. 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+    {
+      id: "doc-4",
+      title: "約款（更新サービス）",
+      content: `# ウェブサイト定期更新サービス利用約款
+
+## 第1条（目的）
+
+本約款は、当社が提供するウェブサイト定期更新サービス（以下「本サービス」といいます）の利用条件を定めるものです。
+
+## 第2条（サービス内容）
+
+本サービスの内容は、商品設計書（更新サービス）に定める各プランの仕様に従います。
+
+## 第3条（契約期間）
+
+1. 本サービスの契約期間は、契約開始日から1年間とします。
+2. 契約期間満了の30日前までに解約の申し出がない場合、同条件で自動更新されるものとします。
+
+## 第4条（料金・支払い）
+
+1. 利用料金は、商品設計書に定める各プランの月額料金とします。
+2. 支払いは毎月末日締め翌月末日払いとします。
+3. 消費税は別途申し受けます。
+
+## 第5条（免責事項）
+
+1. 天災、戦争、テロ、感染症等の不可抗力による本サービスの停止・遅延について、当社は責任を負いません。
+2. お客様の指示に基づく作業の結果について、当社は故意または重大な過失がない限り責任を負いません。
+
+## 第6条（禁止事項）
+
+お客様は、以下の行為を行ってはなりません。
+- 違法または公序良俗に反するコンテンツの掲載依頼
+- 第三者の著作権・知的財産権を侵害するコンテンツの掲載依頼
+- 本サービスの転売・再提供
+
+## 第7条（改定）
+
+当社は、必要に応じて本約款を改定することができます。改定後の約款は、当社ウェブサイトへの掲載をもってお客様に通知します。
+
+## 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+    {
+      id: "doc-5",
+      title: "商品紹介チラシ（更新サービス）",
+      content: `# 商品紹介チラシ（更新サービス）
+
+## ウェブサイト定期更新サービスのご案内
+
+**「ウェブサイトの更新、もっと楽に！」**
+
+---
+
+### こんなお悩みはありませんか？
+
+- ウェブサイトを更新したいが、社内にスキルがない
+- 制作会社に頼むと都度費用がかかって大変
+- 更新が遅くて、情報が古いまま...
+
+---
+
+### 解決します！定期更新サービス
+
+**月額3万円〜** の定額料金で、プロのスタッフがあなたのウェブサイトを管理・更新します。
+
+#### ライトプラン（月額3万円）
+✓ 月5回まで更新
+✓ バナー月2点制作
+✓ 平日対応
+
+#### スタンダードプラン（月額8万円）
+✓ 月15回まで更新
+✓ バナー月5点制作
+✓ 軽微なプログラム修正も対応
+
+#### プレミアムプラン（月額15万円）
+✓ 更新回数無制限
+✓ デザイン制作充実
+✓ 24時間緊急対応
+
+---
+
+### ご利用までの流れ
+
+1. **お問い合わせ** → 担当者よりご連絡
+2. **ヒアリング** → ご要望・現状確認
+3. **プラン決定** → ご契約
+4. **サービス開始** → 即日対応可能！
+
+---
+
+*詳細はサービス約款をご確認ください。*
+
+お問い合わせ: info@example.com / TEL: 03-XXXX-XXXX
+`,
+    },
+    {
+      id: "doc-6",
+      title: "就業規則",
+      content: `# 就業規則
+
+## 第1章 総則
+
+### 第1条（目的）
+
+本規則は、経営計画書に定める経営理念のもと、会社（以下「会社」といいます）と従業員が協力して業務を遂行するための基本的な事項を定めるものです。
+
+### 第2条（適用範囲）
+
+本規則は、会社に雇用される全ての正社員に適用されます。
+
+## 第2章 採用・異動
+
+### 第3条（採用）
+
+会社は、採用選考を経て従業員を採用します。
+
+### 第4条（試用期間）
+
+採用から3ヶ月間を試用期間とします。
+
+## 第3章 勤務時間・休憩
+
+### 第5条（所定労働時間）
+
+1. 所定労働時間は1日8時間、週40時間とします。
+2. 始業時刻: 9:00 / 終業時刻: 18:00（休憩1時間）
+
+### 第6条（テレワーク）
+
+テレワーク勤務については、テレワーク規程に定めるところによります。
+
+## 第4章 休日・休暇
+
+### 第7条（休日）
+
+- 土曜日・日曜日
+- 国民の祝日
+- 年末年始（12/29〜1/3）
+- 会社が定める記念日
+
+### 第8条（年次有給休暇）
+
+入社後6ヶ月経過後に10日付与し、以後勤続年数に応じて付与します。
+
+## 第5章 退職・解雇
+
+### 第9条（退職）
+
+退職を希望する場合は、少なくとも30日前に会社に申し出るものとします。
+
+### 第10条（解雇）
+
+会社は、以下の事由がある場合に従業員を解雇することができます。
+- 業務上の重大な非違行為
+- 能力不足で改善の見込みがない場合
+- 会社の経営上やむを得ない場合
+
+## 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+    {
+      id: "doc-7",
+      title: "テレワーク規程",
+      content: `# テレワーク規程
+
+## 第1条（目的）
+
+本規程は、就業規則第6条に基づき、テレワーク勤務の実施に関する事項を定めるものです。
+
+## 第2条（定義）
+
+テレワーク勤務とは、従業員が通常の勤務場所以外（自宅等）において、情報通信機器を活用して業務を行う形態をいいます。
+
+## 第3条（対象者）
+
+テレワーク勤務の対象は、以下の要件を全て満たす従業員とします。
+- 雇用形態が正社員であること
+- 試用期間が終了していること
+- 業務内容がテレワークに適していること
+- 自宅の作業環境が整っていること
+
+## 第4条（セキュリティ要件）
+
+テレワーク勤務時のセキュリティは、セキュリティポリシーに定める事項を遵守するものとします。
+
+### 4.1 機器の取り扱い
+- 会社支給の端末を原則として使用する
+- 私用端末の使用は情報システム部門の承認が必要
+
+### 4.2 ネットワーク
+- 公衆Wi-Fiは原則禁止
+- VPNを使用して社内ネットワークに接続する
+
+## 第5条（申請手続き）
+
+テレワーク勤務を希望する場合は、テレワーク申請書の提出の仕方に定める手順に従い申請します。
+
+## 第6条（勤務時間管理）
+
+1. 勤務時間は就業規則に定める所定労働時間とします。
+2. 始業・終業時刻は、システムへのログイン・ログアウトで記録します。
+
+## 第7条（費用負担）
+
+| 費用項目 | 負担者 |
+|---------|--------|
+| 通信費（月2,000円まで） | 会社 |
+| 光熱費 | 個人 |
+| 消耗品費 | 個人 |
+
+## 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+    {
+      id: "doc-8",
+      title: "テレワーク申請書の提出の仕方",
+      content: `# テレワーク申請書の提出の仕方
+
+## 概要
+
+本文書は、テレワーク規程に基づくテレワーク勤務申請の手順を説明します。
+
+## 申請の種類
+
+### 1. 定期テレワーク申請（月次）
+毎月の定期テレワーク勤務日程を申請します。
+
+### 2. 随時テレワーク申請
+突発的な事情によりテレワーク勤務を希望する場合の申請です。
+
+## 申請手順
+
+### 定期申請の場合
+
+1. **申請期限**: 前月25日まで
+2. **申請方法**:
+   - 社内ポータルの「テレワーク申請」メニューを開く
+   - 「新規申請」をクリック
+   - 希望する日程を選択（最大週3日まで）
+   - 業務内容の概要を入力
+   - 「申請する」ボタンをクリック
+3. **承認フロー**: 直属の上司 → 人事部
+4. **通知**: 承認・却下はメールで通知
+
+### 随時申請の場合
+
+1. **申請期限**: 前日17:00まで（当日申請は原則不可）
+2. **申請方法**: 上記と同様
+3. **備考欄**: 随時申請の理由を必ず記入
+
+## 注意事項
+
+- 承認なしのテレワーク勤務は認められません
+- 申請内容に虚偽があった場合は懲戒の対象となります
+- セキュリティポリシーおよびテレワーク規程を遵守してください
+
+## 問い合わせ先
+
+人事部テレワーク担当: telework@example.com
+`,
+    },
+    {
+      id: "doc-9",
+      title: "セキュリティポリシー",
+      content: `# 情報セキュリティポリシー
+
+## 1. 基本方針
+
+本ポリシーは、経営計画書に定める経営方針のコンプライアンス原則に基づき、当社の情報資産を適切に保護するための基本方針を定めます。
+
+## 2. 適用範囲
+
+本ポリシーは、当社の全従業員、業務委託先、および当社の情報システムを利用する全ての者に適用されます。テレワーク勤務中も同様に適用されます。
+
+## 3. 情報資産の分類
+
+| 分類 | 説明 | 取り扱い |
+|------|------|--------|
+| 最重要 | 顧客個人情報、営業秘密 | 暗号化必須、持ち出し禁止 |
+| 重要 | 社内機密情報、財務情報 | アクセス制限、ログ取得 |
+| 一般 | 通常業務情報 | 標準的な管理 |
+| 公開 | 公開可能情報 | 制限なし |
+
+## 4. アクセス管理
+
+- パスワードは12文字以上、英数字記号を組み合わせること
+- パスワードは90日ごとに変更すること
+- 多要素認証（MFA）を必ず有効にすること
+- 不要なアカウントは速やかに削除すること
+
+## 5. 端末・ネットワーク管理
+
+- 会社支給端末にセキュリティソフトを導入すること
+- OSおよびアプリケーションは常に最新の状態を維持すること
+- 公衆Wi-Fiの使用は禁止とし、VPNを使用すること
+
+## 6. インシデント対応
+
+セキュリティインシデントが発生した場合は、セキュリティハンドブックに定める手順に従い対応します。
+
+## 7. 定期的な評価
+
+セキュリティ対策の有効性は、セキュリティ定期チェック方針に従い定期的に評価します。
+
+## 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+    {
+      id: "doc-10",
+      title: "セキュリティハンドブック",
+      content: `# セキュリティハンドブック
+
+## はじめに
+
+本ハンドブックは、セキュリティポリシーに基づき、日常業務におけるセキュリティ対策の具体的な手順を説明します。
+
+## 第1章 日常的なセキュリティ対策
+
+### 1.1 パスワード管理
+
+**良いパスワードの作り方:**
+- 12文字以上
+- 大文字・小文字・数字・記号を組み合わせる
+- 個人情報（誕生日、名前等）を使わない
+- 他のサービスと同じパスワードを使わない
+
+**パスワードマネージャーの使用を推奨します。**
+
+### 1.2 フィッシング対策
+
+怪しいメールを受け取ったら:
+1. 送信者のアドレスを確認する
+2. リンクはクリックせず、公式サイトに直接アクセスする
+3. 不審なメールは情報システム部門に報告する
+
+### 1.3 端末の管理
+
+- 離席時は必ずスクリーンロックをかける（ショートカット: Win+L / Cmd+Ctrl+Q）
+- 端末を紛失・盗難した場合は直ちに情報システム部門に報告する
+
+## 第2章 インシデント対応手順
+
+### 2.1 インシデント発見時
+
+1. **即時報告**: 情報システム部門に電話で連絡（内線: 1234）
+2. **作業停止**: 被害拡大防止のため作業を止める
+3. **証拠保全**: ログ・スクリーンショット等を保存する
+4. **上司報告**: 直属の上司に報告する
+
+### 2.2 対応フロー
+
+発見 → 報告 → 初期対応 → 調査 → 再発防止策 → 報告書作成
+
+### 2.3 インシデント分類
+
+| レベル | 例 | 対応時間 |
+|-------|-----|---------|
+| 緊急 | 情報漏洩、ランサムウェア | 即時 |
+| 高 | 不正アクセス、マルウェア感染 | 4時間以内 |
+| 中 | フィッシングメール受信 | 24時間以内 |
+| 低 | ポリシー違反 | 1週間以内 |
+
+## 第3章 テレワーク時のセキュリティ
+
+テレワーク勤務時は、テレワーク規程の第4条に定めるセキュリティ要件を特に厳守してください。
+
+## 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+    {
+      id: "doc-11",
+      title: "セキュリティ定期チェック方針",
+      content: `# セキュリティ定期チェック方針
+
+## 1. 目的
+
+本方針は、セキュリティポリシーの実効性を維持するため、定期的なセキュリティ評価・チェックの実施方法を定めます。
+
+## 2. チェック体制
+
+| 役割 | 担当者 | 責任範囲 |
+|------|--------|--------|
+| セキュリティ責任者 | CTO | 全体統括、最終承認 |
+| 情報システム部門 | 情報システム部長 | 技術的チェックの実施 |
+| 各部門担当 | 各部門長 | 部門内チェック |
+
+## 3. 定期チェックの種類と周期
+
+### 3.1 日次チェック
+- セキュリティアラートの確認
+- 不審なアクセスログのレビュー
+
+### 3.2 月次チェック
+- 不要アカウントの棚卸し
+- パッチ適用状況の確認
+- バックアップの動作確認
+
+### 3.3 四半期チェック
+- 脆弱性スキャンの実施
+- アクセス権限の棚卸し
+- フィッシングシミュレーション
+
+### 3.4 年次チェック
+- ペネトレーションテスト
+- セキュリティポリシーの見直し
+- セキュリティハンドブックの更新
+- 全社セキュリティ教育の実施
+
+## 4. チェック結果の報告
+
+- 四半期チェック: 経営会議で報告
+- 年次チェック: 取締役会で報告
+
+## 5. 不適合への対応
+
+チェックで不適合が発見された場合：
+1. 重要度判定（セキュリティハンドブックの分類に基づく）
+2. 是正計画の策定
+3. 是正措置の実施
+4. 効果確認
+
+## 改訂履歴
+
+| 版 | 改訂日 | 内容 |
+|----|--------|------|
+| 1.0 | 2025-04-01 | 初版 |
+`,
+    },
+  ];
+
+  // 文書の作成
+  for (const doc of documents) {
+    const existing = await prisma.document.findUnique({ where: { id: doc.id } });
+    if (!existing) {
+      await prisma.document.create({
+        data: {
+          id: doc.id,
+          title: doc.title,
+          content: doc.content,
+          status: "PUBLISHED",
+          currentVersion: "1.0",
+          createdById: admin.id,
+          assigneeId: admin.id,
+        },
+      });
+      console.log(`Document created: ${doc.title}`);
+    } else {
+      await prisma.document.update({
+        where: { id: doc.id },
+        data: {
+          title: doc.title,
+          content: doc.content,
+          status: "PUBLISHED",
+          assigneeId: existing.assigneeId ?? admin.id,
+        },
+      });
+      console.log(`Document updated: ${doc.title}`);
     }
+  }
+
+  // 10依存関係の作成
+  const dependencies = [
+    // 事業計画書→経営計画書
+    { id: "dep-1", dependentDocId: "doc-2", dependencyDocId: "doc-1" },
+    // 就業規則→経営計画書
+    { id: "dep-2", dependentDocId: "doc-6", dependencyDocId: "doc-1" },
+    // セキュリティポリシー→経営計画書
+    { id: "dep-3", dependentDocId: "doc-9", dependencyDocId: "doc-1" },
+    // 商品設計書→事業計画書
+    { id: "dep-4", dependentDocId: "doc-3", dependencyDocId: "doc-2" },
+    // 約款→商品設計書
+    { id: "dep-5", dependentDocId: "doc-4", dependencyDocId: "doc-3" },
+    // 商品紹介チラシ→商品設計書
+    { id: "dep-6", dependentDocId: "doc-5", dependencyDocId: "doc-3" },
+    // テレワーク規程→就業規則
+    { id: "dep-7", dependentDocId: "doc-7", dependencyDocId: "doc-6" },
+    // テレワーク規程→セキュリティポリシー（複数親）
+    { id: "dep-8", dependentDocId: "doc-7", dependencyDocId: "doc-9" },
+    // テレワーク申請書→テレワーク規程
+    { id: "dep-9", dependentDocId: "doc-8", dependencyDocId: "doc-7" },
+    // セキュリティハンドブック→セキュリティポリシー
+    { id: "dep-10", dependentDocId: "doc-10", dependencyDocId: "doc-9" },
+    // セキュリティ定期チェック方針→セキュリティポリシー
+    { id: "dep-11", dependentDocId: "doc-11", dependencyDocId: "doc-9" },
+  ];
+
+  for (const dep of dependencies) {
+    await prisma.documentDependency.upsert({
+      where: {
+        dependentDocId_dependencyDocId: {
+          dependentDocId: dep.dependentDocId,
+          dependencyDocId: dep.dependencyDocId,
+        },
+      },
+      update: {},
+      create: {
+        id: dep.id,
+        dependentDocId: dep.dependentDocId,
+        dependencyDocId: dep.dependencyDocId,
+      },
+    });
+    console.log(`Dependency created: ${dep.dependentDocId} → ${dep.dependencyDocId}`);
   }
 
   console.log("Seeding completed!");

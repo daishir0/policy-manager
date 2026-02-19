@@ -11,8 +11,13 @@ datasource db {
 }
 
 // ========================================
-// 認証・ユーザー管理 (Auth.js + RBAC)
+// 認証・ユーザー管理
 // ========================================
+
+enum UserRole {
+  ADMIN
+  STAFF
+}
 
 model User {
   id            String    @id @default(cuid())
@@ -21,8 +26,7 @@ model User {
   password      String    // bcryptハッシュ
   emailVerified DateTime?
   image         String?
-  roleId        String
-  role          Role      @relation(fields: [roleId], references: [id])
+  role          UserRole  @default(STAFF)
 
   // ロック関連
   failedLoginAttempts Int       @default(0)
@@ -33,13 +37,15 @@ model User {
   updatedAt DateTime @updatedAt
 
   // リレーション
-  accounts      Account[]
-  sessions      Session[]
-  documents     Document[]        @relation("CreatedDocuments")
-  editedVersions DocumentVersion[] @relation("EditedVersions")
-  accessLogs    AccessLog[]
-  qaInteractions QAInteraction[]
-  bookmarks     Bookmark[]
+  accounts        Account[]
+  sessions        Session[]
+  documents       Document[]         @relation("CreatedDocuments")
+  assignedDocs    Document[]         @relation("AssignedDocuments")
+  editedVersions  DocumentVersion[]  @relation("EditedVersions")
+  accessLogs      AccessLog[]
+  qaInteractions  QAInteraction[]
+  bookmarks       Bookmark[]
+  messages        Message[]          @relation("ReceivedMessages")
 
   @@map("users")
 }
@@ -82,42 +88,26 @@ model VerificationToken {
   @@map("verification_tokens")
 }
 
-model Role {
-  id          String   @id @default(cuid())
-  name        String   @unique // system_admin, document_admin, employee
-  displayName String
-  description String?
-  permissions String[] // 権限の配列
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users User[]
-
-  @@map("roles")
-}
-
 // ========================================
-// 文書管理 (Document Versioning Pattern)
+// 文書管理
 // ========================================
 
 model Document {
   id          String   @id @default(cuid())
   title       String
   content     String   @db.Text
-  summary     String?  @db.Text
   status      DocumentStatus @default(DRAFT)
 
   // バージョン管理
   currentVersion  String   @default("1.0")
 
-  // 施行管理
-  effectiveDate   DateTime?  // 施行日
-  expirationDate  DateTime?  // 廃止日
-
   // 作成者
   createdById String
   createdBy   User     @relation("CreatedDocuments", fields: [createdById], references: [id])
+
+  // 担当者（デフォルトはcreatedById）
+  assigneeId  String?
+  assignee    User?    @relation("AssignedDocuments", fields: [assigneeId], references: [id])
 
   // タイムスタンプ
   createdAt DateTime @default(now())
@@ -126,8 +116,6 @@ model Document {
 
   // リレーション
   versions      DocumentVersion[]
-  categories    DocumentCategory[]
-  organizations DocumentOrganization[]
   attachments   Attachment[]
   dependencies  DocumentDependency[] @relation("DependentDocument")
   dependents    DocumentDependency[] @relation("DependencyDocument")
@@ -135,10 +123,11 @@ model Document {
   bookmarks     Bookmark[]
   embeddings    DocumentEmbedding[]
   permissions   DocumentPermission[]
+  messages      Message[]
 
   @@index([status])
   @@index([createdById])
-  @@index([effectiveDate])
+  @@index([assigneeId])
   @@map("documents")
 }
 
@@ -150,7 +139,6 @@ model DocumentVersion {
   version     String   // "1.0", "1.1", "2.0" etc.
   title       String
   content     String   @db.Text
-  summary     String?  @db.Text
   changeNote  String?  @db.Text // 変更内容の説明
 
   // 編集者
@@ -171,66 +159,6 @@ enum DocumentStatus {
 }
 
 // ========================================
-// 分類・組織
-// ========================================
-
-model Category {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  parentId    String?
-  parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children    Category[] @relation("CategoryHierarchy")
-  sortOrder   Int        @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  documents DocumentCategory[]
-
-  @@index([parentId])
-  @@map("categories")
-}
-
-model DocumentCategory {
-  documentId String
-  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-
-  @@id([documentId, categoryId])
-  @@map("document_categories")
-}
-
-model Organization {
-  id          String   @id @default(cuid())
-  name        String
-  code        String   @unique // 部門コード
-  parentId    String?
-  parent      Organization?  @relation("OrganizationHierarchy", fields: [parentId], references: [id])
-  children    Organization[] @relation("OrganizationHierarchy")
-  sortOrder   Int            @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  documents DocumentOrganization[]
-
-  @@index([parentId])
-  @@map("organizations")
-}
-
-model DocumentOrganization {
-  documentId     String
-  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@id([documentId, organizationId])
-  @@map("document_organizations")
-}
-
-// ========================================
 // 添付ファイル
 // ========================================
 
@@ -243,6 +171,7 @@ model Attachment {
   mimeType    String
   fileSize    Int      // bytes
   storagePath String   // ファイル保存パス
+  extractedText String? @db.Text // PDF等から抽出したテキスト
 
   createdAt DateTime @default(now())
 
@@ -260,9 +189,6 @@ model DocumentDependency {
   dependentDoc       Document @relation("DependentDocument", fields: [dependentDocId], references: [id], onDelete: Cascade)
   dependencyDocId    String   // 依存される文書（親）
   dependencyDoc      Document @relation("DependencyDocument", fields: [dependencyDocId], references: [id], onDelete: Cascade)
-
-  relationshipType   String?  // 参照、引用、補足など
-  description        String?
 
   createdAt DateTime @default(now())
 
@@ -283,7 +209,7 @@ model DocumentEmbedding {
 
   chunkIndex  Int      // ドキュメント内のチャンク番号
   chunkText   String   @db.Text
-  embedding   Json     // 768次元のfloat配列をJSONとして保存（pgvector未インストール時の代替）
+  embedding   Json     // 768次元のfloat配列をJSONとして保存
 
   createdAt   DateTime @default(now())
 
@@ -358,41 +284,6 @@ model Bookmark {
 }
 
 // ========================================
-// 提案
-// ========================================
-
-model Proposal {
-  id          String   @id @default(cuid())
-  type        ProposalType
-  title       String
-  description String   @db.Text
-  reasoning   String   @db.Text // 提案理由（AI分析結果等）
-
-  status      ProposalStatus @default(PENDING)
-
-  // 関連文書
-  relatedDocuments Json? // 関連文書ID配列
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([type])
-  @@index([status])
-  @@map("proposals")
-}
-
-enum ProposalType {
-  REVISION   // 改訂提案
-  NEW        // 新設提案
-}
-
-enum ProposalStatus {
-  PENDING    // 未対応
-  ACCEPTED   // 採用
-  REJECTED   // 却下
-}
-
-// ========================================
 // 文書単位権限
 // ========================================
 
@@ -401,9 +292,8 @@ model DocumentPermission {
   documentId  String
   document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  // 権限対象（ユーザーまたは組織）
+  // 権限対象（ユーザー）
   userId         String?
-  organizationId String?
 
   // 権限レベル
   permissionLevel DocumentPermissionLevel @default(READ)
@@ -412,10 +302,8 @@ model DocumentPermission {
   updatedAt DateTime @updatedAt
 
   @@unique([documentId, userId])
-  @@unique([documentId, organizationId])
   @@index([documentId])
   @@index([userId])
-  @@index([organizationId])
   @@map("document_permissions")
 }
 
@@ -423,6 +311,27 @@ enum DocumentPermissionLevel {
   READ       // 閲覧のみ
   WRITE      // 編集可能
   ADMIN      // 権限管理可能
+}
+
+// ========================================
+// メッセージ（矛盾チェック通知等）
+// ========================================
+
+model Message {
+  id         String    @id @default(cuid())
+  userId     String    // 受信者
+  user       User      @relation("ReceivedMessages", fields: [userId], references: [id], onDelete: Cascade)
+  content    String    @db.Text
+  documentId String?   // 関連文書（任意）
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  readAt     DateTime? // 既読日時（nullなら未読）
+
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([documentId])
+  @@index([readAt])
+  @@map("messages")
 }
 
 // ========================================

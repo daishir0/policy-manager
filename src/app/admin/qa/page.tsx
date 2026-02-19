@@ -32,7 +32,7 @@ export default function QAPage() {
               <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                 <li>質問は具体的にすると正確な回答が得られます</li>
                 <li>回答の下に参照文書へのリンクが表示されます</li>
-                <li>フィードバックボタンで回答の評価ができます</li>
+                <li>AIの回答は参考程度に、必ず原文書をご確認ください</li>
                 <li>Enterキーで送信、Shift+Enterで改行です</li>
               </ul>
             </CardContent>

@@ -30,34 +30,6 @@ export async function GET(
   }
 }
 
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
-    }
-
-    await requirePermission("document:update");
-
-    const { id } = await params;
-    const body = await request.json();
-    const dependency = await dependencyService.updateDependency(id, body);
-
-    return NextResponse.json(dependency);
-  } catch (error) {
-    console.error("Update dependency error:", error);
-    if (error instanceof Error) {
-      if (error.message.includes("権限")) {
-        return NextResponse.json({ error: error.message }, { status: 403 });
-      }
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-    return NextResponse.json({ error: "依存関係の更新に失敗しました" }, { status: 500 });
-  }
-}
 
 export async function DELETE(
   request: NextRequest,

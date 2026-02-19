@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { documentService } from "@/lib/services/document.service";
 import { auditService } from "@/lib/services/audit.service";
+import { aiService } from "@/lib/services/ai.service";
 import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
 import { DocumentStatus } from "@prisma/client";
 
@@ -19,8 +20,7 @@ export async function GET(request: NextRequest) {
   const filter = {
     search: searchParams.get("search") || undefined,
     status: (searchParams.get("status") as DocumentStatus) || undefined,
-    categoryId: searchParams.get("categoryId") || undefined,
-    organizationId: searchParams.get("organizationId") || undefined,
+    assigneeId: searchParams.get("assigneeId") || undefined,
     createdById: searchParams.get("createdById") || undefined,
     page: parseInt(searchParams.get("page") || "1"),
     limit: parseInt(searchParams.get("limit") || "20"),
@@ -56,6 +56,17 @@ export async function POST(request: NextRequest) {
       entityId: document.id,
       details: { title: document.title },
       ipAddress: request.headers.get("x-forwarded-for") || undefined,
+    });
+
+    // 非同期で矛盾チェックを実行（保存は即時完了）
+    Promise.resolve().then(() => {
+      aiService.checkContradictionsWithTree(
+        document.id,
+        document.title,
+        document.content
+      ).catch((error) => {
+        console.error("Async contradiction check failed:", error);
+      });
     });
 
     return NextResponse.json(document, { status: 201 });

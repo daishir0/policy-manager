@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { aiService } from "@/lib/services/ai.service";
+import { auditService } from "@/lib/services/audit.service";
 import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "crypto";
@@ -44,6 +45,15 @@ export async function POST(request: NextRequest) {
         ipAddress: request.headers.get("x-forwarded-for") || undefined,
         userAgent: request.headers.get("user-agent") || undefined,
       },
+    });
+
+    // 監査ログにも記録（ログ管理画面で確認可能）
+    await auditService.log({
+      userId: session.user.id,
+      action: "qa_ask",
+      entityType: "ai",
+      details: { question: question.substring(0, 200), sessionId: qaSessionId },
+      ipAddress: request.headers.get("x-forwarded-for") || undefined,
     });
 
     return NextResponse.json({ ...result, sessionId: qaSessionId });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { aiService } from "@/lib/services/ai.service";
+import { auditService } from "@/lib/services/audit.service";
 import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
 
 export async function POST(request: NextRequest) {
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { idea, additionalContext, regenerate, originalDraft, feedback, referencedDocumentIds } = body;
+    const { idea, documentTitle, regenerate, originalDraft, feedback, referencedDocumentIds } = body;
 
     if (regenerate) {
       if (!originalDraft || !feedback) {
@@ -34,13 +35,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (!idea) {
-      return NextResponse.json(
-        { error: "idea は必須です" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "idea は必須です" }, { status: 400 });
     }
 
-    const result = await aiService.generateDraft(idea, additionalContext);
+    const result = await aiService.generateDraft(idea, documentTitle);
+
+    await auditService.log({
+      userId: session.user.id,
+      action: "draft_generate",
+      entityType: "ai",
+      details: { idea: idea.substring(0, 100) },
+      ipAddress: request.headers.get("x-forwarded-for") || undefined,
+    });
+
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to generate draft:", error);

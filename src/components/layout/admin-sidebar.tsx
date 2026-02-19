@@ -2,19 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   FileText,
-  FolderTree,
-  Building2,
+  Network,
   Users,
   MessageSquare,
   BarChart3,
-  Lightbulb,
   Settings,
-  Search,
-  Shield,
   Home,
-  Network,
+  Inbox,
+  ClipboardList,
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,33 +30,31 @@ import {
 const documentItems = [
   { title: "ダッシュボード", url: "/admin", icon: Home },
   { title: "文書一覧", url: "/admin/documents", icon: FileText },
-  { title: "文書検索", url: "/admin/search", icon: Search },
   { title: "依存関係", url: "/admin/dependencies", icon: Network },
-];
-
-const categoryItems = [
-  { title: "カテゴリ管理", url: "/admin/categories", icon: FolderTree },
-  { title: "組織管理", url: "/admin/organizations", icon: Building2 },
 ];
 
 const aiItems = [
   { title: "Q&A対話", url: "/admin/qa", icon: MessageSquare },
-  { title: "文案生成", url: "/admin/draft", icon: Lightbulb },
 ];
 
-const analyticsItems = [
+const adminAnalyticsItems = [
   { title: "アクセス統計", url: "/admin/analytics", icon: BarChart3 },
-  { title: "改善提案", url: "/admin/proposals", icon: Lightbulb },
+  { title: "ログ管理", url: "/admin/logs", icon: ClipboardList },
 ];
 
-const settingsItems = [
+const settingsPublicItems = [
+  { title: "メッセージ", url: "/admin/messages", icon: Inbox },
+];
+
+const settingsAdminItems = [
   { title: "ユーザー管理", url: "/admin/users", icon: Users },
-  { title: "権限設定", url: "/admin/roles", icon: Shield },
   { title: "設定", url: "/admin/settings", icon: Settings },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
 
   const isActive = (url: string) => {
     if (url === "/admin") {
@@ -76,6 +72,7 @@ export function AdminSidebar() {
         </Link>
       </SidebarHeader>
       <SidebarContent>
+        {/* 文書管理 */}
         <SidebarGroup>
           <SidebarGroupLabel>文書管理</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -94,24 +91,7 @@ export function AdminSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>分類・組織</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {categoryItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)}>
-                    <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
+        {/* AI機能 */}
         <SidebarGroup>
           <SidebarGroupLabel>AI機能</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -130,11 +110,33 @@ export function AdminSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* 分析・管理（ADMINのみ） */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>分析・管理</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminAnalyticsItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <Link href={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* 設定 */}
         <SidebarGroup>
-          <SidebarGroupLabel>分析・提案</SidebarGroupLabel>
+          <SidebarGroupLabel>設定</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {analyticsItems.map((item) => (
+              {settingsPublicItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
                     <Link href={item.url}>
@@ -144,15 +146,7 @@ export function AdminSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup>
-          <SidebarGroupLabel>設定</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {settingsItems.map((item) => (
+              {isAdmin && settingsAdminItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
                     <Link href={item.url}>
@@ -168,7 +162,7 @@ export function AdminSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t p-4">
         <div className="text-xs text-muted-foreground">
-          Policy Manager v1.0
+          Policy Manager v2.0
         </div>
       </SidebarFooter>
     </Sidebar>

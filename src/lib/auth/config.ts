@@ -38,14 +38,13 @@ const fullAuthConfig = {
           console.log("[Auth] Looking up user:", email);
           const user = await prisma.user.findUnique({
             where: { email },
-            include: { role: true },
           });
 
           if (!user) {
             console.log("[Auth] User not found:", email);
             return null;
           }
-          console.log("[Auth] User found:", user.email, "Role:", user.role?.name);
+          console.log("[Auth] User found:", user.email, "Role:", user.role);
           console.log("[Auth] User password exists:", !!user.password, "Length:", user.password?.length);
 
           // アカウントロックチェック
@@ -95,7 +94,7 @@ const fullAuthConfig = {
             id: user.id,
             email: user.email,
             name: user.name,
-            role: user.role?.name || "employee",
+            role: user.role,
             image: user.image,
           };
         } catch (error) {

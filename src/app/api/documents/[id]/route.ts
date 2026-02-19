@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { documentService } from "@/lib/services/document.service";
 import { auditService } from "@/lib/services/audit.service";
+import { aiService } from "@/lib/services/ai.service";
 import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
 
 export async function GET(
@@ -20,6 +21,17 @@ export async function GET(
   try {
     const { id } = await params;
     const document = await documentService.getDocument(id);
+
+    // 文書閲覧ログを記録
+    auditService.log({
+      userId: session.user.id,
+      action: "document_view",
+      entityType: "document",
+      entityId: id,
+      details: { title: document.title },
+      ipAddress: request.headers.get("x-forwarded-for") || undefined,
+    }).catch((err) => console.error("Failed to log document view:", err));
+
     return NextResponse.json(document);
   } catch (error) {
     console.error("Failed to get document:", error);
@@ -53,6 +65,17 @@ export async function PATCH(
       entityId: id,
       details: { title: document.title, updatedFields: Object.keys(body) },
       ipAddress: request.headers.get("x-forwarded-for") || undefined,
+    });
+
+    // 非同期で矛盾チェックを実行（保存は即時完了）
+    Promise.resolve().then(() => {
+      aiService.checkContradictionsWithTree(
+        id,
+        document.title,
+        document.content
+      ).catch((error) => {
+        console.error("Async contradiction check failed:", error);
+      });
     });
 
     return NextResponse.json(document);

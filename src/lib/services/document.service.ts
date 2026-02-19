@@ -6,22 +6,17 @@ import { DocumentStatus } from "@prisma/client";
 export const createDocumentSchema = z.object({
   title: z.string().min(1, "タイトルを入力してください"),
   content: z.string().min(1, "本文を入力してください"),
-  summary: z.string().optional(),
-  categoryIds: z.array(z.string()).optional(),
-  organizationIds: z.array(z.string()).optional(),
-  effectiveDate: z.string().datetime().optional(),
-  expirationDate: z.string().datetime().optional(),
+  dependencyIds: z.array(z.string()).optional(),
+  assigneeId: z.string().optional(),
 });
 
 export const updateDocumentSchema = z.object({
   title: z.string().min(1, "タイトルを入力してください").optional(),
   content: z.string().min(1, "本文を入力してください").optional(),
-  summary: z.string().optional(),
-  categoryIds: z.array(z.string()).optional(),
-  organizationIds: z.array(z.string()).optional(),
-  effectiveDate: z.string().datetime().nullable().optional(),
-  expirationDate: z.string().datetime().nullable().optional(),
+  dependencyIds: z.array(z.string()).optional(),
+  assigneeId: z.string().optional().nullable(),
   changeNote: z.string().optional(),
+  status: z.nativeEnum(DocumentStatus).optional(),
 });
 
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
@@ -30,8 +25,7 @@ export type UpdateDocumentInput = z.infer<typeof updateDocumentSchema>;
 export interface DocumentFilter {
   search?: string;
   status?: DocumentStatus;
-  categoryId?: string;
-  organizationId?: string;
+  assigneeId?: string;
   createdById?: string;
   page?: number;
   limit?: number;
@@ -45,23 +39,24 @@ export class DocumentService {
       data: {
         title: validated.title,
         content: validated.content,
-        summary: validated.summary,
-        status: DocumentStatus.DRAFT,
+        status: DocumentStatus.PUBLISHED,
         currentVersion: "1.0",
-        effectiveDate: validated.effectiveDate ? new Date(validated.effectiveDate) : null,
-        expirationDate: validated.expirationDate ? new Date(validated.expirationDate) : null,
         createdById,
-        categories: validated.categoryIds?.length
-          ? { create: validated.categoryIds.map((categoryId) => ({ categoryId })) }
-          : undefined,
-        organizations: validated.organizationIds?.length
-          ? { create: validated.organizationIds.map((organizationId) => ({ organizationId })) }
+        assigneeId: validated.assigneeId || createdById,
+        dependencies: validated.dependencyIds?.length
+          ? {
+              create: validated.dependencyIds.map((dependencyDocId) => ({
+                dependencyDocId,
+              })),
+            }
           : undefined,
       },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
-        categories: { include: { category: true } },
-        organizations: { include: { organization: true } },
+        assignee: { select: { id: true, name: true, email: true } },
+        dependencies: {
+          include: { dependencyDoc: { select: { id: true, title: true } } },
+        },
       },
     });
 
@@ -72,7 +67,6 @@ export class DocumentService {
         version: "1.0",
         title: document.title,
         content: document.content,
-        summary: document.summary,
         changeNote: "初版作成",
         editedById: createdById,
       },
@@ -84,13 +78,8 @@ export class DocumentService {
   async updateDocument(id: string, input: UpdateDocumentInput, editedById: string) {
     const validated = updateDocumentSchema.parse(input);
 
-    // 現在の文書を取得
     const current = await prisma.document.findUnique({
       where: { id },
-      include: {
-        categories: true,
-        organizations: true,
-      },
     });
 
     if (!current) {
@@ -101,62 +90,52 @@ export class DocumentService {
     const [major, minor] = current.currentVersion.split(".").map(Number);
     const newVersion = `${major}.${minor + 1}`;
 
-    // トランザクションで更新
     const document = await prisma.$transaction(async (tx) => {
-      // 現在の内容を履歴に保存
-      if (validated.title || validated.content || validated.summary) {
+      // 内容変更時はバージョン履歴を保存
+      if (validated.title || validated.content) {
         await tx.documentVersion.create({
           data: {
             documentId: id,
             version: newVersion,
             title: validated.title || current.title,
             content: validated.content || current.content,
-            summary: validated.summary !== undefined ? validated.summary : current.summary,
             changeNote: validated.changeNote || "内容更新",
             editedById,
           },
         });
       }
 
-      // カテゴリの更新
-      if (validated.categoryIds !== undefined) {
-        await tx.documentCategory.deleteMany({ where: { documentId: id } });
-        if (validated.categoryIds.length > 0) {
-          await tx.documentCategory.createMany({
-            data: validated.categoryIds.map((categoryId) => ({ documentId: id, categoryId })),
+      // 依存関係の更新
+      if (validated.dependencyIds !== undefined) {
+        await tx.documentDependency.deleteMany({ where: { dependentDocId: id } });
+        if (validated.dependencyIds.length > 0) {
+          await tx.documentDependency.createMany({
+            data: validated.dependencyIds.map((dependencyDocId) => ({
+              dependentDocId: id,
+              dependencyDocId,
+            })),
           });
         }
       }
 
-      // 組織の更新
-      if (validated.organizationIds !== undefined) {
-        await tx.documentOrganization.deleteMany({ where: { documentId: id } });
-        if (validated.organizationIds.length > 0) {
-          await tx.documentOrganization.createMany({
-            data: validated.organizationIds.map((organizationId) => ({ documentId: id, organizationId })),
-          });
-        }
-      }
-
-      // 文書の更新
       return tx.document.update({
         where: { id },
         data: {
           ...(validated.title && { title: validated.title }),
           ...(validated.content && { content: validated.content }),
-          ...(validated.summary !== undefined && { summary: validated.summary }),
-          ...(validated.effectiveDate !== undefined && {
-            effectiveDate: validated.effectiveDate ? new Date(validated.effectiveDate) : null,
-          }),
-          ...(validated.expirationDate !== undefined && {
-            expirationDate: validated.expirationDate ? new Date(validated.expirationDate) : null,
-          }),
-          currentVersion: newVersion,
+          ...(validated.assigneeId !== undefined && { assigneeId: validated.assigneeId }),
+          ...(validated.status && { status: validated.status }),
+          ...(validated.title || validated.content ? { currentVersion: newVersion } : {}),
         },
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
-          categories: { include: { category: true } },
-          organizations: { include: { organization: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+          dependencies: {
+            include: { dependencyDoc: { select: { id: true, title: true } } },
+          },
+          dependents: {
+            include: { dependentDoc: { select: { id: true, title: true } } },
+          },
         },
       });
     });
@@ -180,14 +159,17 @@ export class DocumentService {
       where: { id, deletedAt: null },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
-        categories: { include: { category: true } },
-        organizations: { include: { organization: true } },
+        assignee: { select: { id: true, name: true, email: true } },
         attachments: true,
+        versions: {
+          include: { editedBy: { select: { name: true, email: true } } },
+          orderBy: { createdAt: "desc" },
+        },
         dependencies: {
-          include: { dependencyDoc: { select: { id: true, title: true } } },
+          include: { dependencyDoc: { select: { id: true, title: true, status: true } } },
         },
         dependents: {
-          include: { dependentDoc: { select: { id: true, title: true } } },
+          include: { dependentDoc: { select: { id: true, title: true, status: true } } },
         },
       },
     });
@@ -200,7 +182,7 @@ export class DocumentService {
   }
 
   async listDocuments(filter: DocumentFilter = {}) {
-    const { search, status, categoryId, organizationId, createdById, page = 1, limit = 20 } = filter;
+    const { search, status, assigneeId, createdById, page = 1, limit = 20 } = filter;
     const skip = (page - 1) * limit;
 
     const where = {
@@ -212,8 +194,7 @@ export class DocumentService {
         ],
       }),
       ...(status && { status }),
-      ...(categoryId && { categories: { some: { categoryId } } }),
-      ...(organizationId && { organizations: { some: { organizationId } } }),
+      ...(assigneeId && { assigneeId }),
       ...(createdById && { createdById }),
     };
 
@@ -222,7 +203,7 @@ export class DocumentService {
         where,
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
-          categories: { include: { category: true } },
+          assignee: { select: { id: true, name: true, email: true } },
         },
         skip,
         take: limit,
@@ -252,40 +233,22 @@ export class DocumentService {
     });
   }
 
-  async getVersion(documentId: string, version: string) {
-    const docVersion = await prisma.documentVersion.findFirst({
-      where: { documentId, version },
-      include: {
-        editedBy: { select: { id: true, name: true, email: true } },
-      },
-    });
-
-    if (!docVersion) {
-      throw new Error("バージョンが見つかりません");
-    }
-
-    return docVersion;
-  }
-
   async publishDocument(id: string, editedById: string) {
     const current = await prisma.document.findUnique({ where: { id } });
     if (!current) {
       throw new Error("文書が見つかりません");
     }
 
-    // メジャーバージョンアップ
     const [major] = current.currentVersion.split(".").map(Number);
     const newVersion = `${major + 1}.0`;
 
     const document = await prisma.$transaction(async (tx) => {
-      // 公開バージョンを履歴に保存
       await tx.documentVersion.create({
         data: {
           documentId: id,
           version: newVersion,
           title: current.title,
           content: current.content,
-          summary: current.summary,
           changeNote: "公開",
           editedById,
         },
@@ -299,6 +262,7 @@ export class DocumentService {
         },
         include: {
           createdBy: { select: { id: true, name: true, email: true } },
+          assignee: { select: { id: true, name: true, email: true } },
         },
       });
     });
@@ -306,26 +270,27 @@ export class DocumentService {
     return document;
   }
 
-  async retireDocument(id: string, editedById: string, expirationDate?: Date) {
+  async retireDocument(id: string, editedById: string) {
+    const current = await prisma.document.findUnique({ where: { id } });
+    if (!current) {
+      throw new Error("文書が見つかりません");
+    }
+
     const document = await prisma.document.update({
       where: { id },
-      data: {
-        status: DocumentStatus.RETIRED,
-        expirationDate: expirationDate || new Date(),
-      },
+      data: { status: DocumentStatus.RETIRED },
       include: {
         createdBy: { select: { id: true, name: true, email: true } },
+        assignee: { select: { id: true, name: true, email: true } },
       },
     });
 
-    // 廃止履歴を記録
     await prisma.documentVersion.create({
       data: {
         documentId: id,
-        version: document.currentVersion,
-        title: document.title,
-        content: document.content,
-        summary: document.summary,
+        version: current.currentVersion,
+        title: current.title,
+        content: current.content,
         changeNote: "廃止",
         editedById,
       },

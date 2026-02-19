@@ -2,9 +2,8 @@ import { auth } from "@/lib/auth";
 
 // ロール定義
 export const ROLES = {
-  SYSTEM_ADMIN: "system_admin",
-  DOCUMENT_ADMIN: "document_admin",
-  EMPLOYEE: "employee",
+  ADMIN: "ADMIN",
+  STAFF: "STAFF",
 } as const;
 
 export type Role = (typeof ROLES)[keyof typeof ROLES];
@@ -16,7 +15,6 @@ export const PERMISSIONS = {
   USER_READ: "user:read",
   USER_UPDATE: "user:update",
   USER_DELETE: "user:delete",
-  ROLE_MANAGE: "role:manage",
 
   // 文書管理
   DOCUMENT_CREATE: "document:create",
@@ -24,19 +22,19 @@ export const PERMISSIONS = {
   DOCUMENT_UPDATE: "document:update",
   DOCUMENT_DELETE: "document:delete",
   DOCUMENT_PUBLISH: "document:publish",
-
-  // カテゴリ・組織管理
-  CATEGORY_MANAGE: "category:manage",
-  ORGANIZATION_MANAGE: "organization:manage",
+  DOCUMENT_ASSIGN: "document:assign",
 
   // AI機能
   AI_CONTRADICTION_CHECK: "ai:contradiction_check",
   AI_DRAFT_GENERATE: "ai:draft_generate",
   AI_QA: "ai:qa",
 
+  // メッセージ
+  MESSAGE_READ: "message:read",
+  MESSAGE_CREATE: "message:create",
+
   // 分析
   ANALYTICS_VIEW: "analytics:view",
-  PROPOSAL_MANAGE: "proposal:manage",
 
   // 監査
   AUDIT_VIEW: "audit:view",
@@ -46,25 +44,15 @@ export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 // ロールごとの権限マッピング
 export const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  [ROLES.SYSTEM_ADMIN]: Object.values(PERMISSIONS), // 全権限
-  [ROLES.DOCUMENT_ADMIN]: [
-    PERMISSIONS.USER_READ,
+  [ROLES.ADMIN]: Object.values(PERMISSIONS) as Permission[], // 全権限
+  [ROLES.STAFF]: [
+    PERMISSIONS.DOCUMENT_READ,
     PERMISSIONS.DOCUMENT_CREATE,
-    PERMISSIONS.DOCUMENT_READ,
     PERMISSIONS.DOCUMENT_UPDATE,
-    PERMISSIONS.DOCUMENT_DELETE,
-    PERMISSIONS.DOCUMENT_PUBLISH,
-    PERMISSIONS.CATEGORY_MANAGE,
-    PERMISSIONS.ORGANIZATION_MANAGE,
-    PERMISSIONS.AI_CONTRADICTION_CHECK,
+    PERMISSIONS.AI_QA,
     PERMISSIONS.AI_DRAFT_GENERATE,
-    PERMISSIONS.AI_QA,
-    PERMISSIONS.ANALYTICS_VIEW,
-    PERMISSIONS.PROPOSAL_MANAGE,
-  ],
-  [ROLES.EMPLOYEE]: [
-    PERMISSIONS.DOCUMENT_READ,
-    PERMISSIONS.AI_QA,
+    PERMISSIONS.AI_CONTRADICTION_CHECK,
+    PERMISSIONS.MESSAGE_READ,
   ],
 };
 
@@ -82,6 +70,11 @@ export function hasAnyPermission(role: Role, permissions: Permission[]): boolean
 // 複数権限の全てを持っているかチェック
 export function hasAllPermissions(role: Role, permissions: Permission[]): boolean {
   return permissions.every((permission) => hasPermission(role, permission));
+}
+
+// ロールがADMINかチェック
+export function isAdmin(role: Role): boolean {
+  return role === ROLES.ADMIN;
 }
 
 // Server Actionで使用する権限チェック

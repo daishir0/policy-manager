@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/config";
 import { AdminLayout } from "@/components/layout/admin-layout";
+import { Toaster } from "@/components/ui/sonner";
 
 export default async function AdminLayoutPage({
   children,
@@ -13,5 +14,10 @@ export default async function AdminLayoutPage({
     redirect("/login");
   }
 
-  return <AdminLayout>{children}</AdminLayout>;
+  return (
+    <>
+      <AdminLayout>{children}</AdminLayout>
+      <Toaster richColors position="top-right" />
+    </>
+  );
 }

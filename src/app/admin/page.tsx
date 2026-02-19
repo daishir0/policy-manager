@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Users, FolderTree, Building2, MessageSquare, TrendingUp } from "lucide-react";
+import { FileText, Users, Network, MessageSquare, TrendingUp, Mail } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 
 async function getDashboardStats() {
@@ -7,35 +7,35 @@ async function getDashboardStats() {
     totalDocuments,
     publishedDocuments,
     draftDocuments,
-    totalCategories,
-    totalOrganizations,
+    retiredDocuments,
     totalUsers,
     recentQACount,
-    pendingProposals,
+    unreadMessages,
+    totalDependencies,
   ] = await Promise.all([
     prisma.document.count({ where: { deletedAt: null } }),
     prisma.document.count({ where: { status: "PUBLISHED", deletedAt: null } }),
     prisma.document.count({ where: { status: "DRAFT", deletedAt: null } }),
-    prisma.category.count(),
-    prisma.organization.count(),
+    prisma.document.count({ where: { status: "RETIRED", deletedAt: null } }),
     prisma.user.count(),
     prisma.qAInteraction.count({
       where: {
         createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
       },
     }),
-    prisma.proposal.count({ where: { status: "PENDING" } }),
+    prisma.message.count({ where: { readAt: null } }),
+    prisma.documentDependency.count(),
   ]);
 
   return {
     totalDocuments,
     publishedDocuments,
     draftDocuments,
-    totalCategories,
-    totalOrganizations,
+    retiredDocuments,
     totalUsers,
     recentQACount,
-    pendingProposals,
+    unreadMessages,
+    totalDependencies,
   };
 }
 
@@ -46,25 +46,19 @@ export default async function AdminDashboardPage() {
     {
       title: "総文書数",
       value: stats.totalDocuments,
-      description: `公開中: ${stats.publishedDocuments} / 下書き: ${stats.draftDocuments}`,
+      description: `公開中: ${stats.publishedDocuments} / 下書き: ${stats.draftDocuments} / 廃止: ${stats.retiredDocuments}`,
       icon: FileText,
     },
     {
-      title: "カテゴリ数",
-      value: stats.totalCategories,
-      description: "文書の分類カテゴリ",
-      icon: FolderTree,
-    },
-    {
-      title: "組織数",
-      value: stats.totalOrganizations,
-      description: "登録されている組織",
-      icon: Building2,
+      title: "依存関係数",
+      value: stats.totalDependencies,
+      description: "文書間の依存関係",
+      icon: Network,
     },
     {
       title: "ユーザー数",
       value: stats.totalUsers,
-      description: "登録ユーザー",
+      description: "登録ユーザー数",
       icon: Users,
     },
     {
@@ -74,10 +68,10 @@ export default async function AdminDashboardPage() {
       icon: MessageSquare,
     },
     {
-      title: "未対応提案",
-      value: stats.pendingProposals,
-      description: "改善提案の未対応件数",
-      icon: TrendingUp,
+      title: "未読メッセージ",
+      value: stats.unreadMessages,
+      description: "矛盾チェック通知など",
+      icon: Mail,
     },
   ];
 
@@ -85,9 +79,7 @@ export default async function AdminDashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">ダッシュボード</h1>
-        <p className="text-muted-foreground">
-          Policy Manager の概要を確認できます
-        </p>
+        <p className="text-muted-foreground">Policy Manager の概要を確認できます</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -129,27 +121,28 @@ export default async function AdminDashboardPage() {
               className="block rounded-lg border p-3 hover:bg-accent transition-colors"
             >
               <div className="font-medium">新規文書作成</div>
-              <div className="text-sm text-muted-foreground">
-                新しい文書を作成します
-              </div>
+              <div className="text-sm text-muted-foreground">新しい文書を作成します</div>
             </a>
             <a
               href="/admin/qa"
               className="block rounded-lg border p-3 hover:bg-accent transition-colors"
             >
               <div className="font-medium">Q&A対話</div>
-              <div className="text-sm text-muted-foreground">
-                AIに質問できます
-              </div>
+              <div className="text-sm text-muted-foreground">AIに質問できます</div>
             </a>
             <a
-              href="/admin/proposals"
+              href="/admin/dependencies"
               className="block rounded-lg border p-3 hover:bg-accent transition-colors"
             >
-              <div className="font-medium">改善提案を確認</div>
-              <div className="text-sm text-muted-foreground">
-                AIによる改善提案を確認します
-              </div>
+              <div className="font-medium">依存関係ツリー</div>
+              <div className="text-sm text-muted-foreground">文書間の依存関係を確認します</div>
+            </a>
+            <a
+              href="/admin/messages"
+              className="block rounded-lg border p-3 hover:bg-accent transition-colors"
+            >
+              <div className="font-medium">メッセージ受信箱</div>
+              <div className="text-sm text-muted-foreground">矛盾チェック結果などの通知</div>
             </a>
           </CardContent>
         </Card>

@@ -21,11 +21,6 @@ export async function GET(
     const searchParams = request.nextUrl.searchParams;
     const version = searchParams.get("version");
 
-    if (version) {
-      const docVersion = await documentService.getVersion(id, version);
-      return NextResponse.json(docVersion);
-    }
-
     const versions = await documentService.getVersionHistory(id);
     return NextResponse.json({ versions });
   } catch (error) {
