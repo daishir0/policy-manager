@@ -6,9 +6,8 @@ const INITIAL_RETRY_DELAY = 1000;
 
 // 利用可能なモデル
 export const AVAILABLE_MODELS = {
-  "haiku": "claude-3-5-haiku-20241022",      // 最も安価
-  "sonnet": "claude-3-5-sonnet-20241022",    // バランス型
-  "sonnet4": "claude-sonnet-4-20250514",     // 高性能
+  "haiku": "claude-haiku-4-5-20251001",      // 最も安価
+  "sonnet": "claude-sonnet-4-20250514",      // バランス型
   "opus": "claude-3-opus-20240229",          // 最高性能
 } as const;
 

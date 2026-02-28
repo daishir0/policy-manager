@@ -5,12 +5,10 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   FileText,
-  Network,
   Users,
   MessageSquare,
   BarChart3,
   Settings,
-  Home,
   Inbox,
   ClipboardList,
 } from "lucide-react";
@@ -28,9 +26,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const documentItems = [
-  { title: "ダッシュボード", url: "/admin", icon: Home },
-  { title: "文書一覧", url: "/admin/documents", icon: FileText },
-  { title: "依存関係", url: "/admin/dependencies", icon: Network },
+  { title: "ポリシー一覧", url: "/admin/policies", icon: FileText },
 ];
 
 const aiItems = [
@@ -57,16 +53,13 @@ export function AdminSidebar() {
   const isAdmin = session?.user?.role === "ADMIN";
 
   const isActive = (url: string) => {
-    if (url === "/admin") {
-      return pathname === "/admin";
-    }
     return pathname.startsWith(url);
   };
 
   return (
     <Sidebar>
       <SidebarHeader className="border-b px-4 py-3">
-        <Link href="/admin" className="flex items-center gap-2">
+        <Link href="/admin/policies" className="flex items-center gap-2">
           <FileText className="h-6 w-6" />
           <span className="font-bold text-lg">Policy Manager</span>
         </Link>

@@ -19,9 +19,8 @@ import { Settings, Cpu, Globe, CheckCircle, RefreshCw, Eye, EyeOff } from "lucid
 import { toast } from "sonner";
 
 const MODEL_OPTIONS = [
-  { value: "haiku", label: "Claude 3.5 Haiku", description: "高速・低コスト" },
-  { value: "sonnet", label: "Claude 3.5 Sonnet", description: "バランス型" },
-  { value: "sonnet4", label: "Claude Sonnet 4", description: "高性能" },
+  { value: "haiku", label: "Claude Haiku 4.5", description: "高速・低コスト" },
+  { value: "sonnet", label: "Claude Sonnet 4", description: "バランス型" },
   { value: "opus", label: "Claude 3 Opus", description: "最高性能" },
 ];
 

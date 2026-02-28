@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { documentService } from "@/lib/services/document.service";
 import { auditService } from "@/lib/services/audit.service";
 import { aiService } from "@/lib/services/ai.service";
+import { analyticsService } from "@/lib/services/analytics.service";
 import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
 import { DocumentStatus } from "@prisma/client";
 
@@ -28,6 +29,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const result = await documentService.listDocuments(filter);
+
+    // 検索クエリがある場合はアクセスログに記録
+    if (filter.search) {
+      analyticsService.logAccess(
+        session.user.id,
+        "search",
+        undefined,
+        { query: filter.search, resultCount: result.pagination?.total ?? 0 },
+        request.headers.get("x-forwarded-for") || undefined,
+        request.headers.get("user-agent") || undefined,
+      ).catch((err) => console.error("Failed to log search:", err));
+    }
+
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to list documents:", error);

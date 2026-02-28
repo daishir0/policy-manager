@@ -55,7 +55,9 @@ interface DocumentData {
 declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    marked?: { parse: (text: string) => string };
+    marked?: { parse: (text: string) => string; setOptions?: (opts: Record<string, unknown>) => void };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    hljs?: { highlightAll: () => void; highlightElement: (el: HTMLElement) => void };
   }
 }
 
@@ -82,6 +84,22 @@ export default function DocumentDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [markedLoaded, setMarkedLoaded] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const [hljsLoaded, setHljsLoaded] = useState(false);
+
+  // highlight.js CSS + Noto Serif JP (明朝体) を動的にロード
+  useEffect(() => {
+    const loadStylesheet = (id: string, href: string) => {
+      if (!globalThis.document.getElementById(id)) {
+        const link = globalThis.document.createElement("link");
+        link.id = id;
+        link.rel = "stylesheet";
+        link.href = href;
+        globalThis.document.head.appendChild(link);
+      }
+    };
+    loadStylesheet("hljs-css", "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css");
+    loadStylesheet("noto-serif-jp", "https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&display=swap");
+  }, []);
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -103,9 +121,21 @@ export default function DocumentDetailPage() {
   useEffect(() => {
     if (!markedLoaded || !document || !contentRef.current) return;
     if (window.marked) {
+      if (window.marked.setOptions) {
+        window.marked.setOptions({
+          gfm: true,
+          breaks: true,
+        });
+      }
       contentRef.current.innerHTML = window.marked.parse(document.content);
+      // highlight.jsでコードブロックをハイライト
+      if (hljsLoaded && window.hljs) {
+        contentRef.current.querySelectorAll("pre code").forEach((block) => {
+          window.hljs!.highlightElement(block as HTMLElement);
+        });
+      }
     }
-  }, [markedLoaded, document]);
+  }, [markedLoaded, hljsLoaded, document]);
 
   const handleDelete = async () => {
     if (!document) return;
@@ -115,7 +145,7 @@ export default function DocumentDetailPage() {
       const res = await fetch(`/api/documents/${id}?hard=true`, { method: "DELETE" });
       if (!res.ok) throw new Error("削除失敗");
       toast.success("文書を削除しました");
-      router.push("/admin/documents");
+      router.push("/admin/policies");
     } catch {
       toast.error("文書の削除に失敗しました");
       setDeleting(false);
@@ -162,10 +192,14 @@ export default function DocumentDetailPage() {
         src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"
         onLoad={() => setMarkedLoaded(true)}
       />
+      <Script
+        src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"
+        onLoad={() => setHljsLoaded(true)}
+      />
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" asChild>
-            <Link href="/admin/documents">
+            <Link href="/admin/policies">
               <ArrowLeft className="mr-2 h-4 w-4" />
               一覧に戻る
             </Link>
@@ -245,7 +279,7 @@ export default function DocumentDetailPage() {
                   <CardContent className="p-6">
                     <div
                       ref={contentRef}
-                      className="prose prose-sm max-w-none dark:prose-invert"
+                      className="official-document"
                     >
                       {/* marked.jsがロードされるまでプレーンテキスト表示 */}
                       {!markedLoaded && (

@@ -128,7 +128,7 @@ function NewDocumentContent() {
     <div className="space-y-6 max-w-3xl">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/admin/documents">
+          <Link href="/admin/policies">
             <ArrowLeft className="mr-2 h-4 w-4" />
             一覧に戻る
           </Link>
@@ -229,7 +229,7 @@ function NewDocumentContent() {
 
       <div className="flex justify-end gap-3">
         <Button variant="outline" asChild>
-          <Link href="/admin/documents">キャンセル</Link>
+          <Link href="/admin/policies">キャンセル</Link>
         </Button>
         <Button onClick={handleCreate} disabled={isLoading}>
           {isLoading ? (

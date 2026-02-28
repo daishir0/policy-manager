@@ -123,3 +123,200 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ===== 官公庁・法務スタイル: Markdown文書表示 ===== */
+.official-document {
+  font-family: "Noto Serif JP", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #1a1a2e;
+  padding: 40px 48px;
+  max-width: none;
+}
+
+/* === 見出し共通 === */
+.official-document h1,
+.official-document h2,
+.official-document h3,
+.official-document h4,
+.official-document h5,
+.official-document h6 {
+  font-family: "Noto Serif JP", "Yu Mincho", serif;
+  color: #0f1b3d;
+  font-weight: 700;
+  margin-top: 2em;
+  margin-bottom: 0.8em;
+  line-height: 1.4;
+}
+
+/* h1: 文書タイトル級 — 太い下線 */
+.official-document h1 {
+  font-size: 1.6em;
+  padding-bottom: 12px;
+  border-bottom: 3px solid #0f1b3d;
+  margin-top: 0;
+}
+
+/* h2: 章レベル — 左ライン＋下線 */
+.official-document h2 {
+  font-size: 1.35em;
+  padding-left: 16px;
+  padding-bottom: 8px;
+  border-left: 4px solid #1e3a5f;
+  border-bottom: 1px solid #c0c8d8;
+  background: linear-gradient(90deg, #f0f3f8 0%, transparent 100%);
+  margin-left: -16px;
+  padding-top: 4px;
+}
+
+/* h3: 節レベル — 下線のみ */
+.official-document h3 {
+  font-size: 1.15em;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #d0d5e0;
+}
+
+/* h4以下 */
+.official-document h4 {
+  font-size: 1.05em;
+  color: #2c3e50;
+}
+
+/* === 段落 === */
+.official-document p {
+  margin-bottom: 1em;
+  text-align: justify;
+  text-justify: inter-ideograph;
+}
+
+/* === 強調 === */
+.official-document strong {
+  color: #0f1b3d;
+  font-weight: 800;
+}
+
+/* === リスト === */
+.official-document ul,
+.official-document ol {
+  margin-bottom: 1.2em;
+  padding-left: 2em;
+}
+
+.official-document li {
+  margin-bottom: 0.4em;
+}
+
+.official-document ol {
+  list-style-type: decimal;
+}
+
+.official-document ol ol {
+  list-style-type: lower-alpha;
+}
+
+.official-document ul {
+  list-style-type: disc;
+}
+
+/* === 引用 (注記・重要事項) === */
+.official-document blockquote {
+  border-left: 4px solid #1e3a5f;
+  background-color: #f5f7fb;
+  padding: 16px 20px;
+  margin: 1.5em 0;
+  border-radius: 0 4px 4px 0;
+  font-style: normal;
+  color: #1a1a2e;
+}
+
+.official-document blockquote p {
+  margin-bottom: 0.5em;
+}
+
+.official-document blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+/* === テーブル === */
+.official-document table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.92em;
+}
+
+.official-document thead th {
+  background-color: #1e3a5f;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 10px 14px;
+  text-align: left;
+  border: 1px solid #1e3a5f;
+}
+
+.official-document tbody td {
+  padding: 9px 14px;
+  border: 1px solid #c0c8d8;
+  vertical-align: top;
+}
+
+.official-document tbody tr:nth-child(even) {
+  background-color: #f7f8fb;
+}
+
+.official-document tbody tr:hover {
+  background-color: #eef1f7;
+}
+
+/* === コードブロック === */
+.official-document pre {
+  background-color: #f4f6fa;
+  border: 1px solid #d0d5e0;
+  border-radius: 4px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin: 1.5em 0;
+  font-family: "Noto Sans Mono", "Source Code Pro", monospace;
+  font-size: 0.88em;
+  line-height: 1.6;
+}
+
+.official-document code {
+  font-family: "Noto Sans Mono", "Source Code Pro", monospace;
+  font-size: 0.9em;
+}
+
+.official-document :not(pre) > code {
+  background-color: #eef1f7;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #d0d5e0;
+  color: #1e3a5f;
+}
+
+/* === 水平線 (条文区切り) === */
+.official-document hr {
+  border: none;
+  border-top: 2px solid #c0c8d8;
+  margin: 2.5em 0;
+}
+
+/* === リンク === */
+.official-document a {
+  color: #1e3a5f;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.official-document a:hover {
+  color: #0a1e3d;
+}
+
+/* === 画像 === */
+.official-document img {
+  max-width: 100%;
+  margin: 1.5em auto;
+  display: block;
+  border: 1px solid #d0d5e0;
+  border-radius: 4px;
+}
