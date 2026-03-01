@@ -124,6 +124,8 @@ model Document {
   embeddings    DocumentEmbedding[]
   permissions   DocumentPermission[]
   messages      Message[]
+  contradictionSources  ContradictionDetection[] @relation("ContradictionSource")
+  contradictionTargets  ContradictionDetection[] @relation("ContradictionTarget")
 
   @@index([status])
   @@index([createdById])
@@ -189,6 +191,7 @@ model DocumentDependency {
   dependentDoc       Document @relation("DependentDocument", fields: [dependentDocId], references: [id], onDelete: Cascade)
   dependencyDocId    String   // 依存される文書（親）
   dependencyDoc      Document @relation("DependencyDocument", fields: [dependencyDocId], references: [id], onDelete: Cascade)
+  isMain             Boolean  @default(false)  // メイン依存先フラグ
 
   createdAt DateTime @default(now())
 
@@ -332,6 +335,32 @@ model Message {
   @@index([documentId])
   @@index([readAt])
   @@map("messages")
+}
+
+// ========================================
+// 矛盾検出
+// ========================================
+
+model ContradictionDetection {
+  id              String    @id @default(cuid())
+  documentId      String    // 新しく作成/編集した文書
+  document        Document  @relation("ContradictionSource", fields: [documentId], references: [id], onDelete: Cascade)
+  comparedDocId   String?   // 比較対象文書（一括チェックの場合はnull）
+  comparedDoc     Document? @relation("ContradictionTarget", fields: [comparedDocId], references: [id], onDelete: Cascade)
+
+  severity        String    // "high" | "medium" | "low"
+  description     String    @db.Text
+  suggestion      String    @db.Text
+
+  ignoredAt       DateTime? // 無視日時
+  ignoredById     String?   // 無視したユーザー
+
+  createdAt       DateTime  @default(now())
+
+  @@index([documentId])
+  @@index([comparedDocId])
+  @@index([ignoredAt])
+  @@map("contradiction_detections")
 }
 
 // ========================================

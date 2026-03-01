@@ -17,7 +17,7 @@ interface ReferencedDoc {
 
 interface DraftResult {
   draft: string;
-  title: string;
+  suggestedTitle?: string;
   referencedDocuments: ReferencedDoc[];
 }
 
@@ -113,7 +113,7 @@ export default function DraftPage() {
     if (!result) return;
     // sessionStorageに保存してから新規作成ページへ遷移
     sessionStorage.setItem("draftData", JSON.stringify({
-      title: result.title || idea.slice(0, 50),
+      title: result.suggestedTitle || idea.slice(0, 50),
       content: result.draft,
       dependencyIds: result.referencedDocuments.map((d) => d.documentId),
     }));
@@ -258,10 +258,10 @@ export default function DraftPage() {
             <CardContent>
               {result ? (
                 <div className="space-y-3">
-                  {result.title && (
+                  {result.suggestedTitle && (
                     <div className="rounded-md border bg-muted/30 px-3 py-2">
                       <p className="text-xs text-muted-foreground">提案タイトル</p>
-                      <p className="font-medium text-sm">{result.title}</p>
+                      <p className="font-medium text-sm">{result.suggestedTitle}</p>
                     </div>
                   )}
                   <div className="rounded-lg border bg-muted/50 p-4">

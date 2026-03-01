@@ -71,14 +71,17 @@ interface DocNode {
 
 interface DepsData {
   nodes: Array<{ id: string; title: string; status: string }>;
-  edges: Array<{ from: string; to: string }>;
+  edges: Array<{ from: string; to: string; isMain: boolean }>;
 }
 
 function buildTree(nodes: DepsData["nodes"], edges: DepsData["edges"]): DocNode[] {
+  // メイン依存関係のエッジのみを使用してツリーを構築
+  const mainEdges = edges.filter(e => e.isMain);
+
   const childrenMap = new Map<string, string[]>();
   const hasParent = new Set<string>();
 
-  for (const edge of edges) {
+  for (const edge of mainEdges) {
     if (!childrenMap.has(edge.to)) {
       childrenMap.set(edge.to, []);
     }
@@ -107,9 +110,30 @@ function buildTree(nodes: DepsData["nodes"], edges: DepsData["edges"]): DocNode[
   return roots.map((r) => buildNode(r.id));
 }
 
-function TreeNode({ node, level = 0 }: { node: DocNode; level?: number }) {
-  const [expanded, setExpanded] = useState(level < 2);
+// ツリーの開閉状態を管理するためのキー
+const TREE_EXPANDED_KEY = "policy-tree-expanded-nodes";
+
+// ツリーから全ノードIDを収集する関数
+function collectAllNodeIds(nodes: DocNode[]): string[] {
+  const ids: string[] = [];
+  function collect(node: DocNode) {
+    ids.push(node.id);
+    node.children.forEach(collect);
+  }
+  nodes.forEach(collect);
+  return ids;
+}
+
+interface TreeNodeProps {
+  node: DocNode;
+  level?: number;
+  expandedNodes: Set<string>;
+  onToggle: (nodeId: string) => void;
+}
+
+function TreeNode({ node, level = 0, expandedNodes, onToggle }: TreeNodeProps) {
   const hasChildren = node.children.length > 0;
+  const expanded = expandedNodes.has(node.id);
 
   const statusColor = {
     PUBLISHED: "bg-green-500",
@@ -121,7 +145,7 @@ function TreeNode({ node, level = 0 }: { node: DocNode; level?: number }) {
     <div className={`${level > 0 ? "ml-6 border-l border-dashed pl-4 mt-2" : "mt-2"}`}>
       <div className="flex items-center gap-2">
         {hasChildren ? (
-          <button onClick={() => setExpanded(!expanded)} className="text-muted-foreground hover:text-foreground">
+          <button onClick={() => onToggle(node.id)} className="text-muted-foreground hover:text-foreground">
             <ChevronRight className={`h-4 w-4 transition-transform ${expanded ? "rotate-90" : ""}`} />
           </button>
         ) : (
@@ -135,14 +159,17 @@ function TreeNode({ node, level = 0 }: { node: DocNode; level?: number }) {
           <FileText className="h-3 w-3 text-muted-foreground" />
           {node.title}
         </Link>
-        <Badge variant="outline" className="text-xs py-0">
-          {node.status === "PUBLISHED" ? "公開" : node.status === "DRAFT" ? "下書き" : "廃止"}
-        </Badge>
       </div>
       {hasChildren && expanded && (
         <div>
           {node.children.map((child, idx) => (
-            <TreeNode key={`${node.id}-${child.id}-${idx}`} node={child} level={level + 1} />
+            <TreeNode
+              key={`${node.id}-${child.id}-${idx}`}
+              node={child}
+              level={level + 1}
+              expandedNodes={expandedNodes}
+              onToggle={onToggle}
+            />
           ))}
         </div>
       )}
@@ -170,6 +197,8 @@ function PoliciesContent() {
   // ツリービュー state
   const [treeLoading, setTreeLoading] = useState(true);
   const [tree, setTree] = useState<DocNode[]>([]);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // リストビュー state
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -223,6 +252,48 @@ function PoliciesContent() {
   useEffect(() => {
     fetchDependencies();
   }, [fetchDependencies]);
+
+  // ツリーデータ取得後に開閉状態を初期化
+  useEffect(() => {
+    if (tree.length > 0 && isInitialLoad) {
+      // localStorageから保存された状態を読み込む
+      try {
+        const saved = localStorage.getItem(TREE_EXPANDED_KEY);
+        if (saved) {
+          const savedIds = JSON.parse(saved) as string[];
+          setExpandedNodes(new Set(savedIds));
+        } else {
+          // 保存された状態がない場合は全展開
+          const allIds = collectAllNodeIds(tree);
+          setExpandedNodes(new Set(allIds));
+        }
+      } catch {
+        // エラー時は全展開
+        const allIds = collectAllNodeIds(tree);
+        setExpandedNodes(new Set(allIds));
+      }
+      setIsInitialLoad(false);
+    }
+  }, [tree, isInitialLoad]);
+
+  // 開閉状態のトグルハンドラ
+  const handleToggleNode = useCallback((nodeId: string) => {
+    setExpandedNodes((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(nodeId)) {
+        newSet.delete(nodeId);
+      } else {
+        newSet.add(nodeId);
+      }
+      // localStorageに保存
+      try {
+        localStorage.setItem(TREE_EXPANDED_KEY, JSON.stringify([...newSet]));
+      } catch {
+        // 保存失敗は無視
+      }
+      return newSet;
+    });
+  }, []);
 
   useEffect(() => {
     fetchDocuments();
@@ -363,7 +434,13 @@ function PoliciesContent() {
                 ) : (
                   <div className="py-2">
                     {tree.map((node) => (
-                      <TreeNode key={node.id} node={node} level={0} />
+                      <TreeNode
+                        key={node.id}
+                        node={node}
+                        level={0}
+                        expandedNodes={expandedNodes}
+                        onToggle={handleToggleNode}
+                      />
                     ))}
                   </div>
                 )}

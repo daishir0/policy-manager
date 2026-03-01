@@ -7,14 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Save, Loader2, Upload, X, Plus } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Upload, X } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
+import { DependencyTreeSelector } from "@/components/dependency-tree-selector";
 
-interface DocumentOption {
+interface SelectedDependency {
   id: string;
   title: string;
+  isMain: boolean;
 }
 
 function NewDocumentContent() {
@@ -23,8 +24,7 @@ function NewDocumentContent() {
   const [isLoading, setIsLoading] = useState(false);
   const [title, setTitle] = useState(searchParams.get("title") || "");
   const [content, setContent] = useState(searchParams.get("content") || "");
-  const [selectedDeps, setSelectedDeps] = useState<DocumentOption[]>([]);
-  const [allDocuments, setAllDocuments] = useState<DocumentOption[]>([]);
+  const [selectedDeps, setSelectedDeps] = useState<SelectedDependency[]>([]);
   const [isPdfLoading, setIsPdfLoading] = useState(false);
   const pendingDepIds = useRef<string[]>([]);
 
@@ -36,29 +36,26 @@ function NewDocumentContent() {
         const data = JSON.parse(saved);
         if (data.title) setTitle(data.title);
         if (data.content) setContent(data.content);
-        if (Array.isArray(data.dependencyIds)) {
-          pendingDepIds.current = data.dependencyIds;
+        if (Array.isArray(data.dependencyIds) && data.dependencyIds.length > 0) {
+          // 文書タイトルを取得して依存先を設定
+          fetch("/api/documents?limit=1000")
+            .then((r) => r.json())
+            .then((docsData) => {
+              const docs = docsData.documents || [];
+              const matched = data.dependencyIds
+                .map((id: string, index: number) => {
+                  const doc = docs.find((d: { id: string; title: string }) => d.id === id);
+                  return doc ? { id: doc.id, title: doc.title, isMain: index === 0 } : null;
+                })
+                .filter(Boolean) as SelectedDependency[];
+              if (matched.length > 0) setSelectedDeps(matched);
+            })
+            .catch(() => {});
         }
         sessionStorage.removeItem("draftData");
       } catch {}
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    fetch("/api/documents?limit=100")
-      .then((r) => r.json())
-      .then((data) => {
-        const docs = (data.documents || []).map((d: DocumentOption) => ({ id: d.id, title: d.title }));
-        setAllDocuments(docs);
-        // 文案生成からの依存先IDを自動セット
-        if (pendingDepIds.current.length > 0) {
-          const matched = docs.filter((d: DocumentOption) => pendingDepIds.current.includes(d.id));
-          if (matched.length > 0) setSelectedDeps(matched);
-          pendingDepIds.current = [];
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -80,15 +77,6 @@ function NewDocumentContent() {
     }
   };
 
-  const toggleDep = (doc: DocumentOption) => {
-    setSelectedDeps((prev) => {
-      if (prev.some((d) => d.id === doc.id)) {
-        return prev.filter((d) => d.id !== doc.id);
-      }
-      return [...prev, doc];
-    });
-  };
-
   const handleCreate = async () => {
     if (!title.trim() || !content.trim()) {
       toast.error("タイトルと本文は必須です");
@@ -97,13 +85,15 @@ function NewDocumentContent() {
 
     setIsLoading(true);
     try {
+      // メイン依存先を先頭にして送信（APIで最初の要素がisMain=trueになる）
+      const sortedDeps = [...selectedDeps].sort((a, b) => (b.isMain ? 1 : 0) - (a.isMain ? 1 : 0));
       const res = await fetch("/api/documents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title,
           content,
-          dependencyIds: selectedDeps.map((d) => d.id),
+          dependencyIds: sortedDeps.map((d) => d.id),
         }),
       });
       if (!res.ok) {
@@ -119,10 +109,6 @@ function NewDocumentContent() {
       setIsLoading(false);
     }
   };
-
-  const availableToAdd = allDocuments.filter(
-    (d) => !selectedDeps.some((s) => s.id === d.id)
-  );
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -196,34 +182,36 @@ function NewDocumentContent() {
         </CardHeader>
         <CardContent className="space-y-4">
           {selectedDeps.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {selectedDeps.map((dep) => (
-                <Badge key={dep.id} variant="secondary" className="gap-1 pr-1">
-                  {dep.title}
-                  <button onClick={() => toggleDep(dep)} className="ml-1 hover:text-destructive">
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          )}
-          {availableToAdd.length > 0 && (
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">依存先を追加:</p>
-              <div className="max-h-48 overflow-y-auto border rounded-md p-2 space-y-1">
-                {availableToAdd.map((doc) => (
-                  <button
-                    key={doc.id}
-                    onClick={() => toggleDep(doc)}
-                    className="w-full text-left px-3 py-1.5 text-sm rounded hover:bg-accent flex items-center gap-2"
-                  >
-                    <Plus className="h-3 w-3 text-muted-foreground" />
-                    {doc.title}
-                  </button>
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg">
+              <p className="text-sm font-medium mb-2">選択中:</p>
+              <div className="space-y-1">
+                {selectedDeps.map((dep) => (
+                  <div key={dep.id} className="flex items-center gap-2 text-sm">
+                    <span className={dep.isMain ? "text-blue-600 font-medium" : "text-muted-foreground"}>
+                      {dep.isMain ? "● メイン:" : "○ サブ:"}
+                    </span>
+                    <span>{dep.title}</span>
+                    <button
+                      onClick={() => {
+                        const newDeps = selectedDeps.filter(d => d.id !== dep.id);
+                        if (dep.isMain && newDeps.length > 0) {
+                          newDeps[0].isMain = true;
+                        }
+                        setSelectedDeps(newDeps);
+                      }}
+                      className="ml-auto text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
           )}
+          <DependencyTreeSelector
+            selectedDeps={selectedDeps}
+            onChange={setSelectedDeps}
+          />
         </CardContent>
       </Card>
 

@@ -74,6 +74,7 @@ const ACTION_LABELS: Record<string, string> = {
   assignee_change: "担当者変更",
   message_read: "メッセージ既読",
   pdf_extract: "PDF抽出",
+  ai_error: "AI呼び出し失敗",
 };
 
 const ACTION_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -85,6 +86,7 @@ const ACTION_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructiv
   document_delete: "destructive",
   document_publish: "default",
   document_retire: "outline",
+  ai_error: "destructive",
 };
 
 export default function LogsPage() {

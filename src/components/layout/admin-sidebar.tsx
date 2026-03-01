@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -11,6 +12,7 @@ import {
   Settings,
   Inbox,
   ClipboardList,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -51,6 +53,27 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+  const [contradictionCount, setContradictionCount] = useState(0);
+
+  // 矛盾検出数を取得
+  useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        const res = await fetch("/api/contradictions/count");
+        if (res.ok) {
+          const data = await res.json();
+          setContradictionCount(data.count || 0);
+        }
+      } catch {
+        // エラー時は0のまま
+      }
+    };
+
+    fetchCount();
+    // 30秒ごとに更新
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const isActive = (url: string) => {
     return pathname.startsWith(url);
@@ -80,6 +103,17 @@ export function AdminSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+              {/* 矛盾検出アラート */}
+              {contradictionCount > 0 && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/admin/contradictions")}>
+                    <Link href="/admin/contradictions" className="text-yellow-600 dark:text-yellow-400">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>矛盾検出 ({contradictionCount}件)</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

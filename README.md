@@ -5,10 +5,10 @@ Policy Manager is a document management system for organizational policies, guid
 
 Key features:
 - Document management with versioning and lifecycle (draft → published → retired)
-- Category and organization hierarchy for document classification
+- Dependency tree structure with main/sub relationships
 - AI-powered Q&A using RAG (Retrieval-Augmented Generation)
-- Contradiction detection between new and existing documents
-- AI-assisted document draft generation
+- Contradiction detection with notification and fix workflow
+- AI-assisted document editing and draft generation
 - Access analytics and improvement proposals
 - Role-based access control (Admin, Document Admin, Employee)
 
@@ -78,12 +78,28 @@ npm start
 1. Access the application at your configured URL
 2. Log in with admin credentials (default: admin@example.com / password123)
 3. Navigate using the sidebar:
+   - **Policy Tree**: View document hierarchy with main dependencies
    - **Documents**: Create, edit, and manage policy documents
    - **Search**: Find documents by keyword
    - **Q&A**: Ask questions about policies (AI-powered)
    - **Draft**: Generate document drafts using AI
+   - **Contradictions**: Review detected contradictions and fix them
    - **Analytics**: View access statistics
-   - **Proposals**: Review AI-generated improvement suggestions
+   - **Messages**: Check notifications from the system
+
+### Key Workflows
+
+#### Document Editing with AI Assistant
+1. Open a document and click "Edit"
+2. Use the AI editing assistant on the right panel
+3. Enter instructions like "Add a purpose section at the beginning"
+4. Review the diff preview and apply changes
+
+#### Contradiction Detection & Resolution
+1. When documents are saved, contradiction checks run automatically
+2. View detected contradictions in the Contradictions page
+3. Click "Fix based on this issue" to open the editor with AI pre-filled
+4. Submit to get AI-generated fix suggestions
 
 ## Notes
 - AI features require a valid Anthropic API key
@@ -103,10 +119,10 @@ Policy Managerは、組織の方針書・ガイドライン・ハンドブック
 
 主な機能:
 - バージョン管理付き文書管理（下書き → 公開 → 廃止のライフサイクル）
-- カテゴリと組織階層による文書分類
+- メイン/サブの関係を持つ依存関係ツリー構造
 - RAG（検索拡張生成）を使用したAI Q&A
-- 新規文書と既存文書間の矛盾検出
-- AIによる文書案生成支援
+- 矛盾検出と通知・修正ワークフロー
+- AIによる文書編集支援・文案生成
 - アクセス分析と改善提案
 - ロールベースのアクセス制御（管理者・文書管理者・従業員）
 
@@ -176,12 +192,28 @@ npm start
 1. 設定したURLでアプリケーションにアクセス
 2. 管理者認証情報でログイン（デフォルト: admin@example.com / password123）
 3. サイドバーを使用してナビゲート:
+   - **ポリシーツリー**: メイン依存関係に基づく文書階層を表示
    - **文書一覧**: ポリシー文書の作成・編集・管理
    - **検索**: キーワードで文書を検索
    - **Q&A対話**: ポリシーについて質問（AI機能）
    - **文案生成**: AIを使用して文書案を生成
+   - **矛盾検出**: 検出された矛盾を確認し修正
    - **アクセス統計**: アクセス統計を表示
-   - **改善提案**: AIが生成した改善提案を確認
+   - **メッセージ**: システムからの通知を確認
+
+### 主なワークフロー
+
+#### AI編集アシスタントを使った文書編集
+1. 文書を開いて「編集」をクリック
+2. 右パネルのAI編集アシスタントを使用
+3. 「冒頭に目的セクションを追加して」などの指示を入力
+4. 差分プレビューを確認し、変更を適用
+
+#### 矛盾検出と解決
+1. 文書保存時に矛盾チェックが自動実行される
+2. 矛盾検出ページで検出された矛盾を確認
+3. 「この指摘を元に修正する」をクリックしてAI入力済みのエディタを開く
+4. 送信してAIによる修正案を取得
 
 ## 注意点
 - AI機能には有効なAnthropic APIキーが必要です

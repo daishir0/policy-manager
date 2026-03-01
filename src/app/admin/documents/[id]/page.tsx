@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import Script from "next/script";
+import { marked } from "marked";
+import hljs from "highlight.js";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -52,15 +53,6 @@ interface DocumentData {
   }>;
 }
 
-declare global {
-  interface Window {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    marked?: { parse: (text: string) => string; setOptions?: (opts: Record<string, unknown>) => void };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    hljs?: { highlightAll: () => void; highlightElement: (el: HTMLElement) => void };
-  }
-}
-
 const statusBadge = (status: string) => {
   switch (status) {
     case "PUBLISHED":
@@ -82,24 +74,7 @@ export default function DocumentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [checkingContradiction, setCheckingContradiction] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [markedLoaded, setMarkedLoaded] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [hljsLoaded, setHljsLoaded] = useState(false);
-
-  // highlight.js CSS + Noto Serif JP (明朝体) を動的にロード
-  useEffect(() => {
-    const loadStylesheet = (id: string, href: string) => {
-      if (!globalThis.document.getElementById(id)) {
-        const link = globalThis.document.createElement("link");
-        link.id = id;
-        link.rel = "stylesheet";
-        link.href = href;
-        globalThis.document.head.appendChild(link);
-      }
-    };
-    loadStylesheet("hljs-css", "https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css");
-    loadStylesheet("noto-serif-jp", "https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&display=swap");
-  }, []);
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -119,23 +94,25 @@ export default function DocumentDetailPage() {
 
   // Markdownレンダリング
   useEffect(() => {
-    if (!markedLoaded || !document || !contentRef.current) return;
-    if (window.marked) {
-      if (window.marked.setOptions) {
-        window.marked.setOptions({
-          gfm: true,
-          breaks: true,
-        });
-      }
-      contentRef.current.innerHTML = window.marked.parse(document.content);
-      // highlight.jsでコードブロックをハイライト
-      if (hljsLoaded && window.hljs) {
-        contentRef.current.querySelectorAll("pre code").forEach((block) => {
-          window.hljs!.highlightElement(block as HTMLElement);
-        });
-      }
+    if (!document || !contentRef.current) return;
+
+    // markedの設定
+    marked.setOptions({
+      gfm: true,
+      breaks: true,
+    });
+
+    // Markdownをパースして表示
+    const html = marked.parse(document.content);
+    if (typeof html === "string") {
+      contentRef.current.innerHTML = html;
     }
-  }, [markedLoaded, hljsLoaded, document]);
+
+    // highlight.jsでコードブロックをハイライト
+    contentRef.current.querySelectorAll("pre code").forEach((block) => {
+      hljs.highlightElement(block as HTMLElement);
+    });
+  }, [document]);
 
   const handleDelete = async () => {
     if (!document) return;
@@ -159,11 +136,15 @@ export default function DocumentDetailPage() {
       const res = await fetch("/api/ai/contradiction-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: document.content, title: document.title }),
+        body: JSON.stringify({
+          content: document.content,
+          title: document.title,
+          documentId: document.id,
+        }),
       });
       const result = await res.json();
       if (result.hasContradictions) {
-        toast.warning(`矛盾が${result.contradictions.length}件検出されました。担当者にメッセージが送信されます。`);
+        toast.warning(`矛盾が${result.contradictions.length}件検出されました。担当者に通知が送信されました。`);
       } else {
         toast.success("矛盾は検出されませんでした");
       }
@@ -187,16 +168,7 @@ export default function DocumentDetailPage() {
   }
 
   return (
-    <>
-      <Script
-        src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"
-        onLoad={() => setMarkedLoaded(true)}
-      />
-      <Script
-        src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"
-        onLoad={() => setHljsLoaded(true)}
-      />
-      <div className="space-y-6">
+    <div className="space-y-6">
         <div className="flex items-center justify-between">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/admin/policies">
@@ -280,12 +252,7 @@ export default function DocumentDetailPage() {
                     <div
                       ref={contentRef}
                       className="official-document"
-                    >
-                      {/* marked.jsがロードされるまでプレーンテキスト表示 */}
-                      {!markedLoaded && (
-                        <pre className="whitespace-pre-wrap text-sm">{document.content}</pre>
-                      )}
-                    </div>
+                    />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -441,6 +408,5 @@ export default function DocumentDetailPage() {
           </div>
         </div>
       </div>
-    </>
   );
 }

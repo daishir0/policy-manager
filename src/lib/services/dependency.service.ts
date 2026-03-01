@@ -18,6 +18,7 @@ export interface DependencyEdge {
   id: string;
   from: string;
   to: string;
+  isMain: boolean;
 }
 
 export interface DependencyGraph {
@@ -169,6 +170,7 @@ export class DependencyService {
         id: dep.id,
         from: dep.dependentDocId,
         to: dep.dependencyDocId,
+        isMain: dep.isMain,
       });
     }
 

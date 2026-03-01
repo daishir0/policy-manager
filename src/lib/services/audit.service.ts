@@ -26,7 +26,8 @@ export type AuditAction =
   | "category_delete"
   | "organization_create"
   | "organization_update"
-  | "organization_delete";
+  | "organization_delete"
+  | "ai_error";
 
 export interface AuditLogInput {
   userId?: string;

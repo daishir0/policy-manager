@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "highlight.js/styles/github.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -126,7 +127,7 @@
 
 /* ===== 官公庁・法務スタイル: Markdown文書表示 ===== */
 .official-document {
-  font-family: "Noto Serif JP", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif;
+  font-family: var(--font-noto-serif-jp), "Noto Serif JP", "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", serif;
   font-size: 15px;
   line-height: 1.9;
   color: #1a1a2e;
@@ -141,7 +142,7 @@
 .official-document h4,
 .official-document h5,
 .official-document h6 {
-  font-family: "Noto Serif JP", "Yu Mincho", serif;
+  font-family: var(--font-noto-serif-jp), "Noto Serif JP", "Yu Mincho", serif;
   color: #0f1b3d;
   font-weight: 700;
   margin-top: 2em;

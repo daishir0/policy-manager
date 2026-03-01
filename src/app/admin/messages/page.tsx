@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,32 @@ interface Message {
 export default function MessagesPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const searchParams = useSearchParams();
+
+  // URLハッシュからスクロール先を取得
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.startsWith("#message-")) {
+      const targetId = hash.replace("#message-", "");
+      setHighlightedId(targetId);
+    }
+  }, [searchParams]);
+
+  // メッセージ一覧の読み込み完了後にスクロール
+  useEffect(() => {
+    if (!loading && highlightedId) {
+      const targetCard = cardRefs.current.get(highlightedId);
+      if (targetCard) {
+        setTimeout(() => {
+          targetCard.scrollIntoView({ behavior: "smooth", block: "center" });
+          // ハイライト解除タイマー
+          setTimeout(() => setHighlightedId(null), 3000);
+        }, 100);
+      }
+    }
+  }, [loading, highlightedId]);
 
   const fetchMessages = useCallback(async () => {
     try {
@@ -105,7 +132,11 @@ export default function MessagesPage() {
           {messages.map((message) => (
             <Card
               key={message.id}
-              className={`transition-colors ${!message.readAt ? "border-blue-200 bg-blue-50/30 dark:bg-blue-950/10" : ""}`}
+              id={`message-${message.id}`}
+              ref={(el) => {
+                if (el) cardRefs.current.set(message.id, el);
+              }}
+              className={`transition-all duration-500 ${!message.readAt ? "border-blue-200 bg-blue-50/30 dark:bg-blue-950/10" : ""} ${highlightedId === message.id ? "ring-2 ring-yellow-400 bg-yellow-50 dark:bg-yellow-950/20" : ""}`}
             >
               <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">

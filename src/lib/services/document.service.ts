@@ -45,8 +45,9 @@ export class DocumentService {
         assigneeId: validated.assigneeId || createdById,
         dependencies: validated.dependencyIds?.length
           ? {
-              create: validated.dependencyIds.map((dependencyDocId) => ({
+              create: validated.dependencyIds.map((dependencyDocId, index) => ({
                 dependencyDocId,
+                isMain: index === 0,  // 最初の依存先をメインに
               })),
             }
           : undefined,
@@ -110,9 +111,10 @@ export class DocumentService {
         await tx.documentDependency.deleteMany({ where: { dependentDocId: id } });
         if (validated.dependencyIds.length > 0) {
           await tx.documentDependency.createMany({
-            data: validated.dependencyIds.map((dependencyDocId) => ({
+            data: validated.dependencyIds.map((dependencyDocId, index) => ({
               dependentDocId: id,
               dependencyDocId,
+              isMain: index === 0,  // 最初の依存先をメインに
             })),
           });
         }
@@ -167,6 +169,7 @@ export class DocumentService {
         },
         dependencies: {
           include: { dependencyDoc: { select: { id: true, title: true, status: true } } },
+          orderBy: { createdAt: "asc" },  // 作成順でソート（最初がメイン）
         },
         dependents: {
           include: { dependentDoc: { select: { id: true, title: true, status: true } } },
@@ -178,7 +181,14 @@ export class DocumentService {
       throw new Error("文書が見つかりません");
     }
 
-    return document;
+    // isMainフラグを含めて返す
+    return {
+      ...document,
+      dependencies: document.dependencies.map((dep) => ({
+        ...dep,
+        isMain: dep.isMain,
+      })),
+    };
   }
 
   async listDocuments(filter: DocumentFilter = {}) {
