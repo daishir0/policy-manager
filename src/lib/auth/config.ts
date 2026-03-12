@@ -1,110 +1,61 @@
-import NextAuth, { CredentialsSignin } from "next-auth";
-import type { JWT } from "next-auth/jwt";
-import type { Session, User } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
+import NextAuth from "next-auth";
+import type { NextAuthConfig } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "./auth.config";
 
-// カスタムエラークラス（アカウントロック用）
-class AccountLockedError extends CredentialsSignin {
-  constructor() {
-    super("ACCOUNT_LOCKED");
-    this.code = "ACCOUNT_LOCKED";
-  }
-}
+/**
+ * Senku Auth (OAuth 2.0 / OIDC) Provider
+ * 共通認証基盤 auth.senku.work を使用
+ */
+const SenkuAuthProvider = {
+  id: "senku-auth",
+  name: "Senku Auth",
+  type: "oidc" as const,
+  issuer: process.env.AUTH_SENKU_ISSUER,
+  clientId: process.env.AUTH_SENKU_ID,
+  clientSecret: process.env.AUTH_SENKU_SECRET,
+  authorization: { params: { scope: "openid profile email" } },
+};
 
-const fullAuthConfig = {
+const fullAuthConfig: NextAuthConfig = {
   ...authConfig,
-  providers: [
-    Credentials({
-      name: "credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        try {
-          console.log("[Auth] Authorize called with credentials:", credentials?.email);
+  providers: [SenkuAuthProvider],
+  callbacks: {
+    ...authConfig.callbacks,
+    async jwt({ token, account, profile }) {
+      // OAuthログイン時にプロファイル情報を取得
+      if (account && profile) {
+        token.id = (profile as { sub?: string }).sub || "";
+        token.email = profile.email || "";
 
-          if (!credentials?.email || !credentials?.password) {
-            console.log("[Auth] Missing email or password");
-            return null;
-          }
-
-          const email = credentials.email as string;
-          const password = credentials.password as string;
-
-          console.log("[Auth] Looking up user:", email);
-          const user = await prisma.user.findUnique({
-            where: { email },
+        // ローカルDBからロール情報を取得
+        if (profile.email) {
+          const localUser = await prisma.user.findUnique({
+            where: { email: profile.email },
           });
-
-          if (!user) {
-            console.log("[Auth] User not found:", email);
-            return null;
+          if (localUser) {
+            token.role = localUser.role;
+          } else {
+            // ローカルDBにユーザーがいない場合はデフォルトロール
+            token.role = "STAFF";
           }
-          console.log("[Auth] User found:", user.email, "Role:", user.role);
-          console.log("[Auth] User password exists:", !!user.password, "Length:", user.password?.length);
-
-          // アカウントロックチェック
-          if (user.lockedUntil && user.lockedUntil > new Date()) {
-            throw new AccountLockedError();
-          }
-
-          console.log("[Auth] Comparing password...");
-          const isPasswordValid = await bcrypt.compare(password, user.password);
-          console.log("[Auth] Password valid:", isPasswordValid);
-
-          if (!isPasswordValid) {
-            // ログイン失敗回数をインクリメント
-            const failedAttempts = user.failedLoginAttempts + 1;
-            const updateData: { failedLoginAttempts: number; lockedUntil?: Date } = {
-              failedLoginAttempts: failedAttempts,
-            };
-
-            // 5回連続失敗でアカウントロック（30分）
-            if (failedAttempts >= 5) {
-              updateData.lockedUntil = new Date(Date.now() + 30 * 60 * 1000);
-            }
-
-            await prisma.user.update({
-              where: { id: user.id },
-              data: updateData,
-            });
-
-            // 5回目の失敗で即座にロックエラーを返す
-            if (failedAttempts >= 5) {
-              throw new AccountLockedError();
-            }
-
-            return null;
-          }
-
-          // ログイン成功時は失敗回数をリセット
-          if (user.failedLoginAttempts > 0) {
-            await prisma.user.update({
-              where: { id: user.id },
-              data: { failedLoginAttempts: 0, lockedUntil: null },
-            });
-          }
-
-          console.log("[Auth] Login successful, returning user");
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-            image: user.image,
-          };
-        } catch (error) {
-          console.error("[Auth] Error in authorize:", error);
-          throw error;
         }
-      },
-    }),
-  ],
-  callbacks: authConfig.callbacks,
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token && session.user) {
+        session.user.id = token.id as string;
+        session.user.role = token.role as string;
+      }
+      return session;
+    },
+  },
+  session: {
+    strategy: "jwt",
+    maxAge: 8 * 60 * 60, // 8時間
+  },
+  trustHost: true,
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth(fullAuthConfig);

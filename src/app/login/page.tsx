@@ -1,130 +1,49 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-function LoginForm() {
-  const router = useRouter();
+function LoginContent() {
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const callbackUrl = searchParams.get("callbackUrl") || "/admin";
+  const errorParam = searchParams.get("error");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleOAuthLogin = async () => {
     setError("");
     setIsLoading(true);
-
     try {
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        // NextAuth v5ではCredentialsSigninのサブクラスのcodeはresult.codeで取得可能
-        if (result.code === "ACCOUNT_LOCKED" || result.error === "ACCOUNT_LOCKED") {
-          setError("アカウントがロックされています。しばらく待ってから再試行してください。");
-        } else {
-          // ログイン失敗時、アカウントがロックされているか確認
-          try {
-            const lockCheckResponse = await fetch("/api/auth/check-lock", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email }),
-            });
-            const lockData = await lockCheckResponse.json();
-            if (lockData.locked) {
-              setError("アカウントがロックされています。しばらく待ってから再試行してください。");
-            } else {
-              setError("メールアドレスまたはパスワードが正しくありません。");
-            }
-          } catch {
-            setError("メールアドレスまたはパスワードが正しくありません。");
-          }
-        }
-      } else {
-        router.push(callbackUrl);
-        router.refresh();
-      }
+      await signIn("senku-auth", { callbackUrl });
     } catch {
       setError("ログインに失敗しました。");
-    } finally {
       setIsLoading(false);
     }
   };
 
-  return (
-    <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error}
-        </div>
-      )}
+  // エラーメッセージの表示
+  const getErrorMessage = () => {
+    if (error) return error;
+    if (errorParam === "OAuthAccountNotLinked") {
+      return "このメールアドレスは既に別のアカウントでリンクされています。";
+    }
+    if (errorParam === "AccessDenied") {
+      return "アクセスが拒否されました。管理者にお問い合わせください。";
+    }
+    if (errorParam === "Callback") {
+      return "認証コールバックでエラーが発生しました。";
+    }
+    if (errorParam) {
+      return "認証エラーが発生しました。再度お試しください。";
+    }
+    return null;
+  };
 
-      <div className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            メールアドレス
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            placeholder="example@company.com"
-          />
-        </div>
+  const displayError = getErrorMessage();
 
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-            パスワード
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            placeholder="********"
-          />
-        </div>
-      </div>
-
-      <button
-        type="submit"
-        disabled={isLoading}
-        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {isLoading ? "ログイン中..." : "ログイン"}
-      </button>
-    </form>
-  );
-}
-
-function LoginFormSkeleton() {
-  return (
-    <div className="mt-8 space-y-6 animate-pulse">
-      <div className="space-y-4">
-        <div className="h-10 bg-gray-200 rounded"></div>
-        <div className="h-10 bg-gray-200 rounded"></div>
-      </div>
-      <div className="h-10 bg-gray-200 rounded"></div>
-    </div>
-  );
-}
-
-export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md">
@@ -137,27 +56,72 @@ export default function LoginPage() {
           </h2>
         </div>
 
-        <Suspense fallback={<LoginFormSkeleton />}>
-          <LoginForm />
-        </Suspense>
+        {displayError && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+            {displayError}
+          </div>
+        )}
 
-        {/* デモ用ログイン情報 */}
+        <div className="mt-8 space-y-4">
+          <button
+            onClick={handleOAuthLogin}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isLoading ? (
+              <>
+                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>認証中...</span>
+              </>
+            ) : (
+              <>
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                <span>Senku Auth でログイン</span>
+              </>
+            )}
+          </button>
+        </div>
+
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <h3 className="text-sm font-medium text-blue-800 mb-2">
-            デモ用アカウント
+            ログイン情報
           </h3>
           <div className="text-sm text-blue-700 space-y-1">
             <p>
-              <span className="font-medium">Email:</span>{" "}
-              <code className="bg-blue-100 px-1 rounded">admin@example.com</code>
+              共通認証基盤（Senku Auth）を使用してログインします。
             </p>
-            <p>
-              <span className="font-medium">Password:</span>{" "}
-              <code className="bg-blue-100 px-1 rounded">password123</code>
+            <p className="text-xs text-blue-600 mt-2">
+              ※ 事前にシステム管理者からアカウントを発行してもらう必要があります。
             </p>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+function LoginSkeleton() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-md animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-3/4 mx-auto"></div>
+        <div className="h-4 bg-gray-200 rounded w-1/2 mx-auto"></div>
+        <div className="h-12 bg-gray-200 rounded"></div>
+        <div className="h-24 bg-gray-200 rounded"></div>
+      </div>
+    </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginContent />
+    </Suspense>
   );
 }
