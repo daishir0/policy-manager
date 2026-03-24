@@ -1,19 +1,13 @@
 import { test, expect } from "@playwright/test";
+import { loginWithOIDC } from "./helpers/auth";
 
 const AI_ENABLED = !!process.env.ANTHROPIC_API_KEY;
 const ADMIN_EMAIL = process.env.TEST_USER_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.TEST_USER_PASSWORD || "password123";
 
 test.describe("対話型Q&A", () => {
-  test.beforeEach(async ({ page, request }) => {
-    try {
-      await request.post("/api/test/reset-user-lock", { data: { email: ADMIN_EMAIL } });
-    } catch { /* ignore */ }
-    await page.goto("/login");
-    await page.fill('input[type="email"]', ADMIN_EMAIL);
-    await page.fill('input[type="password"]', ADMIN_PASSWORD);
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/admin/, { timeout: 10000 });
+  test.beforeEach(async ({ page }) => {
+    await loginWithOIDC(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   });
 
   test("Q&Aページが表示される", async ({ page }) => {

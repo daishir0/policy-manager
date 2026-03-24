@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { auditService } from "@/lib/services/audit.service";
-import { isAdmin, type Role } from "@/lib/auth/permissions";
+import { isAdmin } from "@/lib/auth/permissions";
 
 export async function PATCH(
   request: NextRequest,
@@ -13,7 +13,7 @@ export async function PATCH(
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!isAdmin(session.user.role as Role)) {
+  if (!isAdmin(session.user.roles)) {
     return NextResponse.json({ error: "管理者権限が必要です" }, { status: 403 });
   }
 

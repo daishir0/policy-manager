@@ -49,10 +49,16 @@ const settingsAdminItems = [
   { title: "設定", url: "/admin/settings", icon: Settings },
 ];
 
+// 管理者ロールを判定
+const hasAdminRole = (roles: string[] | undefined): boolean => {
+  if (!roles) return false;
+  return roles.some((role) => ["super_admin", "admin", "ADMIN"].includes(role));
+};
+
 export function AdminSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
-  const isAdmin = session?.user?.role === "ADMIN";
+  const isAdmin = hasAdminRole(session?.user?.roles);
   const [contradictionCount, setContradictionCount] = useState(0);
 
   // 矛盾検出数を取得

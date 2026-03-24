@@ -12,10 +12,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Users, Plus, Search, Mail, Trash2, Edit, FileText, RefreshCw } from "lucide-react";
+import { Users, Search, Mail, Edit, FileText, RefreshCw, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 interface AssignedDoc {
@@ -28,8 +27,7 @@ interface User {
   id: string;
   email: string;
   name: string | null;
-  role: "ADMIN" | "STAFF";
-  isLocked: boolean;
+  authRoles: string[];
   createdAt: string;
   assignedDocs?: AssignedDoc[];
 }
@@ -47,16 +45,18 @@ interface DocOption {
   assigneeId: string | null;
 }
 
+// 管理者ロールを判定
+const isAdminUser = (roles: string[]): boolean => {
+  return roles.some((role) => ["super_admin", "admin", "ADMIN"].includes(role));
+};
+
 export default function UsersPage() {
   const [data, setData] = useState<UsersResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ email: "", name: "", password: "", role: "STAFF" });
-  const [creating, setCreating] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", role: "STAFF" });
+  const [editForm, setEditForm] = useState({ name: "" });
   const [updating, setUpdating] = useState(false);
   const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
   const [assigningUser, setAssigningUser] = useState<User | null>(null);
@@ -85,44 +85,9 @@ export default function UsersPage() {
 
   const handleSearch = () => fetchUsers(searchQuery);
 
-  const handleCreateUser = async () => {
-    setCreating(true);
-    try {
-      const response = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newUser),
-      });
-      if (!response.ok) {
-        const d = await response.json();
-        throw new Error(d.error || "ユーザーの作成に失敗しました");
-      }
-      setIsCreateDialogOpen(false);
-      setNewUser({ email: "", name: "", password: "", role: "STAFF" });
-      toast.success("ユーザーを作成しました");
-      fetchUsers();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "エラーが発生しました");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm("このユーザーを削除しますか？")) return;
-    try {
-      const response = await fetch(`/api/users/${userId}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("ユーザーの削除に失敗しました");
-      toast.success("ユーザーを削除しました");
-      fetchUsers();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "エラーが発生しました");
-    }
-  };
-
   const handleOpenEditDialog = (user: User) => {
     setEditingUser(user);
-    setEditForm({ name: user.name || "", role: user.role });
+    setEditForm({ name: user.name || "" });
     setIsEditDialogOpen(true);
   };
 
@@ -186,8 +151,10 @@ export default function UsersPage() {
     }
   };
 
-  const getRoleBadge = (role: string) => {
-    if (role === "ADMIN") return <Badge variant="destructive">管理者</Badge>;
+  const getRoleBadge = (roles: string[]) => {
+    if (isAdminUser(roles)) {
+      return <Badge variant="destructive">管理者</Badge>;
+    }
     return <Badge variant="secondary">スタッフ</Badge>;
   };
 
@@ -196,71 +163,14 @@ export default function UsersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">ユーザー管理</h1>
-          <p className="text-muted-foreground">システムユーザーの管理と担当者割り当てを行います</p>
+          <p className="text-muted-foreground">システムユーザーの担当者割り当てを行います</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              新規ユーザー
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>新規ユーザー作成</DialogTitle>
-              <DialogDescription>新しいユーザーアカウントを作成します</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="email">メールアドレス</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  placeholder="user@example.com"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="name">名前</Label>
-                <Input
-                  id="name"
-                  value={newUser.name}
-                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  placeholder="山田 太郎"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">パスワード</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={newUser.password}
-                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  placeholder="8文字以上"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="role">ロール</Label>
-                <select
-                  id="role"
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2"
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                >
-                  <option value="STAFF">スタッフ</option>
-                  <option value="ADMIN">管理者</option>
-                </select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>キャンセル</Button>
-              <Button onClick={handleCreateUser} disabled={creating}>
-                {creating ? "作成中..." : "作成"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <Button asChild variant="outline">
+          <a href="https://auth.senku.work/admin/users" target="_blank" rel="noopener noreferrer">
+            <ExternalLink className="mr-2 h-4 w-4" />
+            認証サービスでユーザー管理
+          </a>
+        </Button>
       </div>
 
       {/* 検索 */}
@@ -308,10 +218,7 @@ export default function UsersPage() {
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-medium">{user.name || "名前未設定"}</span>
-                          {getRoleBadge(user.role)}
-                          {user.isLocked && (
-                            <Badge variant="outline" className="text-destructive">ロック中</Badge>
-                          )}
+                          {getRoleBadge(user.authRoles || [])}
                         </div>
                         <div className="flex items-center gap-1 text-sm text-muted-foreground">
                           <Mail className="h-3 w-3" />
@@ -331,14 +238,6 @@ export default function UsersPage() {
                         data-testid="edit-user-button"
                       >
                         <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteUser(user.id)}
-                        data-testid="delete-user-button"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </div>
@@ -374,7 +273,7 @@ export default function UsersPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>ユーザー編集</DialogTitle>
-            <DialogDescription>{editingUser?.email} の情報を編集します</DialogDescription>
+            <DialogDescription>{editingUser?.email} の表示名を編集します</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -386,18 +285,9 @@ export default function UsersPage() {
                 placeholder="山田 太郎"
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-role">ロール</Label>
-              <select
-                id="edit-role"
-                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2"
-                value={editForm.role}
-                onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
-              >
-                <option value="STAFF">スタッフ</option>
-                <option value="ADMIN">管理者</option>
-              </select>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              ※ ロールや認証情報は<a href="https://auth.senku.work/admin/users" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">認証サービス</a>で管理されています
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>キャンセル</Button>

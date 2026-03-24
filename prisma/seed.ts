@@ -2,7 +2,7 @@ import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
-import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -16,30 +16,32 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
   console.log("Seeding database...");
 
-  // 管理者ユーザーの作成
-  const adminPassword = await bcrypt.hash("password123", 12);
+  // 管理者ユーザーの作成（authサービスからのキャッシュを模擬）
+  // 注意: 実際の運用ではauthサービスでユーザーを作成し、
+  // OAuth経由でログインすると自動的にこちらにも登録されます
   const admin = await prisma.user.upsert({
     where: { email: "admin@example.com" },
-    update: { password: adminPassword, role: "ADMIN" },
+    update: { authRoles: ["super_admin"] },
     create: {
+      id: randomUUID(), // authサービスと同じUUIDを使用
       email: "admin@example.com",
       name: "管理者",
-      password: adminPassword,
-      role: "ADMIN",
+      authRoles: ["super_admin"],
+      syncedAt: new Date(),
     },
   });
   console.log("Admin user created/updated:", admin.email);
 
   // スタッフユーザーの作成
-  const staffPassword = await bcrypt.hash("password123", 12);
   const staff = await prisma.user.upsert({
     where: { email: "staff01@example.com" },
-    update: { password: staffPassword, role: "STAFF" },
+    update: { authRoles: ["user"] },
     create: {
+      id: randomUUID(),
       email: "staff01@example.com",
       name: "スタッフ01",
-      password: staffPassword,
-      role: "STAFF",
+      authRoles: ["user"],
+      syncedAt: new Date(),
     },
   });
   console.log("Staff user created/updated:", staff.email);
@@ -706,6 +708,91 @@ async function main() {
     });
     console.log(`Dependency created: ${dep.dependentDocId} → ${dep.dependencyDocId}`);
   }
+
+  // サービス固有権限のシード
+  const servicePermissions = [
+    {
+      name: "document:read",
+      displayName: "文書閲覧",
+      category: "document",
+      description: "公開文書を閲覧する権限",
+    },
+    {
+      name: "document:create",
+      displayName: "文書作成",
+      category: "document",
+      description: "新規文書を作成する権限",
+    },
+    {
+      name: "document:update",
+      displayName: "文書編集",
+      category: "document",
+      description: "文書を編集する権限",
+    },
+    {
+      name: "document:delete",
+      displayName: "文書削除",
+      category: "document",
+      description: "文書を削除する権限",
+    },
+    {
+      name: "document:publish",
+      displayName: "文書公開・廃止",
+      category: "document",
+      description: "文書を公開または廃止する権限",
+    },
+    {
+      name: "qa:use",
+      displayName: "Q&A利用",
+      category: "qa",
+      description: "Q&A機能を利用する権限",
+    },
+    {
+      name: "admin:user-manage",
+      displayName: "ユーザー管理",
+      category: "admin",
+      description: "サービス固有のユーザー権限を管理する権限",
+    },
+    {
+      name: "admin:settings",
+      displayName: "設定管理",
+      category: "admin",
+      description: "システム設定を管理する権限",
+    },
+  ];
+
+  for (const perm of servicePermissions) {
+    await prisma.servicePermission.upsert({
+      where: { name: perm.name },
+      update: {
+        displayName: perm.displayName,
+        category: perm.category,
+        description: perm.description,
+      },
+      create: perm,
+    });
+    console.log(`Service permission created/updated: ${perm.name}`);
+  }
+
+  // 管理者ユーザーに全サービス権限を付与
+  const allPermissions = await prisma.servicePermission.findMany();
+  for (const perm of allPermissions) {
+    await prisma.userServicePermission.upsert({
+      where: {
+        userId_permissionId: {
+          userId: admin.id,
+          permissionId: perm.id,
+        },
+      },
+      update: {},
+      create: {
+        userId: admin.id,
+        permissionId: perm.id,
+        grantedBy: admin.id,
+      },
+    });
+  }
+  console.log(`All service permissions granted to admin user`);
 
   console.log("Seeding completed!");
 }

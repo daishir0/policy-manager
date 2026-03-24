@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { loginWithOIDC } from "./helpers/auth";
 
 const ADMIN_EMAIL = process.env.TEST_USER_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.TEST_USER_PASSWORD || "password123";
@@ -7,15 +8,8 @@ const STAFF_PASSWORD = process.env.TEST_STAFF_PASSWORD || "password123";
 
 test.describe("メッセージ受信箱", () => {
   test.describe("管理者", () => {
-    test.beforeEach(async ({ page, request }) => {
-      try {
-        await request.post("/api/test/reset-user-lock", { data: { email: ADMIN_EMAIL } });
-      } catch { /* ignore */ }
-      await page.goto("/login");
-      await page.fill('input[type="email"]', ADMIN_EMAIL);
-      await page.fill('input[type="password"]', ADMIN_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/admin/, { timeout: 10000 });
+    test.beforeEach(async ({ page }) => {
+      await loginWithOIDC(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     });
 
     test("メッセージページが表示される", async ({ page }) => {
@@ -40,15 +34,8 @@ test.describe("メッセージ受信箱", () => {
   });
 
   test.describe("スタッフ", () => {
-    test.beforeEach(async ({ page, request }) => {
-      try {
-        await request.post("/api/test/reset-user-lock", { data: { email: STAFF_EMAIL } });
-      } catch { /* ignore */ }
-      await page.goto("/login");
-      await page.fill('input[type="email"]', STAFF_EMAIL);
-      await page.fill('input[type="password"]', STAFF_PASSWORD);
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/admin/, { timeout: 10000 });
+    test.beforeEach(async ({ page }) => {
+      await loginWithOIDC(page, STAFF_EMAIL, STAFF_PASSWORD);
     });
 
     test("スタッフもメッセージページにアクセスできる", async ({ page }) => {

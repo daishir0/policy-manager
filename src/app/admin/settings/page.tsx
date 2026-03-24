@@ -24,6 +24,12 @@ const MODEL_OPTIONS = [
   { value: "opus", label: "Claude 3 Opus", description: "最高性能" },
 ];
 
+// 管理者ロールチェック（super_admin または admin）
+const hasAdminRole = (roles: string[] | undefined): boolean => {
+  if (!roles) return false;
+  return roles.some((role) => ["super_admin", "admin", "ADMIN"].includes(role));
+};
+
 export default function SettingsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -39,13 +45,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (status === "loading") return;
-    if (!session || session.user.role !== "ADMIN") {
+    if (!session || !hasAdminRole(session.user.roles)) {
       router.replace("/admin");
     }
   }, [session, status, router]);
 
   useEffect(() => {
-    if (!session || session.user.role !== "ADMIN") return;
+    if (!session || !hasAdminRole(session.user.roles)) return;
     fetch("/api/settings")
       .then((res) => res.json())
       .then((data) => {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { documentService } from "@/lib/services/document.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 
 export async function GET(
   request: NextRequest,
@@ -12,15 +12,12 @@ export async function GET(
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.DOCUMENT_READ)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.DOCUMENT_READ)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 
   try {
     const { id } = await params;
-    const searchParams = request.nextUrl.searchParams;
-    const version = searchParams.get("version");
-
     const versions = await documentService.getVersionHistory(id);
     return NextResponse.json({ versions });
   } catch (error) {

@@ -14,14 +14,18 @@ export const authConfig: NextAuthConfig = {
     jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
+        token.roles = user.roles || [];
+        token.permissions = user.permissions || [];
+        token.primaryOrganization = user.primaryOrganization || null;
       }
       return token;
     },
     session({ session, token }) {
       if (token && session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as string;
+        session.user.roles = token.roles as string[];
+        session.user.permissions = token.permissions as string[];
+        session.user.primaryOrganization = token.primaryOrganization || null;
       }
       return session;
     },

@@ -1,18 +1,19 @@
 import { test, expect } from "@playwright/test";
+import { loginWithOIDC } from "./helpers/auth";
+
+/**
+ * ユーザー管理 E2Eテスト
+ *
+ * 注: ユーザーの作成・削除・ロール管理は auth.senku.work で行われます。
+ * policy-manager ではユーザー一覧の表示、名前の編集、文書の割り当てのみ行えます。
+ */
 
 const ADMIN_EMAIL = process.env.TEST_USER_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.TEST_USER_PASSWORD || "password123";
 
 test.describe("ユーザー管理", () => {
-  test.beforeEach(async ({ page, request }) => {
-    try {
-      await request.post("/api/test/reset-user-lock", { data: { email: ADMIN_EMAIL } });
-    } catch { /* ignore */ }
-    await page.goto("/login");
-    await page.fill('input[type="email"]', ADMIN_EMAIL);
-    await page.fill('input[type="password"]', ADMIN_PASSWORD);
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/admin/, { timeout: 10000 });
+  test.beforeEach(async ({ page }) => {
+    await loginWithOIDC(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   });
 
   test("ユーザー管理ページが表示される", async ({ page }) => {
@@ -26,48 +27,31 @@ test.describe("ユーザー管理", () => {
     await expect(page.locator("text=件のユーザー")).toBeVisible({ timeout: 10000 });
   });
 
-  test("ロールバッジがADMIN/STAFFで表示される", async ({ page }) => {
+  test("ロールバッジが管理者/スタッフで表示される", async ({ page }) => {
     await page.goto("/admin/users");
     await page.waitForTimeout(2000);
-    const adminBadge = page.locator("text=管理者").first();
-    const staffBadge = page.locator("text=スタッフ").first();
-    const roleBadge = adminBadge.or(staffBadge);
-    await expect(roleBadge).toBeVisible({ timeout: 10000 });
+    // Either admin or staff badge should be visible
+    const adminBadge = page.locator('[data-slot="badge"]:has-text("管理者")').first();
+    const staffBadge = page.locator('[data-slot="badge"]:has-text("スタッフ")').first();
+    const adminVisible = await adminBadge.isVisible().catch(() => false);
+    const staffVisible = await staffBadge.isVisible().catch(() => false);
+    expect(adminVisible || staffVisible).toBe(true);
   });
 
   test("ユーザー検索が機能する", async ({ page }) => {
     await page.goto("/admin/users");
     await page.fill('input[placeholder*="検索"]', "admin");
     await page.click('button:has-text("検索")');
-    await expect(page.locator(`text=${ADMIN_EMAIL}`)).toBeVisible({ timeout: 10000 });
+    // 検索結果が表示される（メールアドレスまたは名前に「admin」を含むユーザー）
+    await expect(page.locator(`text=admin`).first()).toBeVisible({ timeout: 10000 });
   });
 
-  test("新規ユーザー作成ダイアログが開く", async ({ page }) => {
+  test("認証サービスへのリンクが表示される", async ({ page }) => {
     await page.goto("/admin/users");
-    await page.click('button:has-text("新規ユーザー")');
-    await expect(page.locator("text=新規ユーザー作成")).toBeVisible();
-    await expect(page.locator('input[id="email"]')).toBeVisible();
-    await expect(page.locator('input[id="name"]')).toBeVisible();
-    await expect(page.locator('input[id="password"]')).toBeVisible();
-    // ロール選択にはADMINとSTAFFのみ存在（selectのoption要素はattachedを確認）
-    await expect(page.locator('option[value="STAFF"]')).toBeAttached();
-    await expect(page.locator('option[value="ADMIN"]')).toBeAttached();
-    // 廃止されたロールが存在しないことを確認
-    await expect(page.locator('option[value="EMPLOYEE"]')).not.toBeAttached();
-    await expect(page.locator('option[value="DOCUMENT_ADMIN"]')).not.toBeAttached();
-  });
-
-  test("新規ユーザーを作成できる", async ({ page }) => {
-    const testEmail = `test-${Date.now()}@example.com`;
-    await page.goto("/admin/users");
-    await page.click('button:has-text("新規ユーザー")');
-    await page.fill('input[id="email"]', testEmail);
-    await page.fill('input[id="name"]', "テストユーザー");
-    await page.fill('input[id="password"]', "TestPassword123!");
-    await page.selectOption('select[id="role"]', "STAFF");
-    await page.locator('button:has-text("作成")').last().click();
-    await expect(page.locator("text=新規ユーザー作成")).toBeHidden({ timeout: 15000 });
-    await expect(page.locator(`text=${testEmail}`)).toBeVisible({ timeout: 10000 });
+    // ユーザー作成はauthサービスで行うためのリンク
+    const authLink = page.locator('a[href*="auth.senku.work"]');
+    await expect(authLink).toBeVisible({ timeout: 10000 });
+    await expect(authLink).toContainText(/認証サービス|ユーザー管理/);
   });
 
   test("ユーザー編集ダイアログが開く", async ({ page }) => {
@@ -77,34 +61,38 @@ test.describe("ユーザー管理", () => {
     await editButton.click();
     await expect(page.locator("text=ユーザー編集")).toBeVisible();
     await expect(page.locator('input[id="edit-name"]')).toBeVisible();
-    // ロール選択にはADMINとSTAFFのみ（option要素はattachedを確認）
-    await expect(page.locator('select[id="edit-role"] option[value="STAFF"]')).toBeAttached();
-    await expect(page.locator('select[id="edit-role"] option[value="ADMIN"]')).toBeAttached();
+    // ロール選択はauthサービスで行うため存在しない
+    await expect(page.locator('select[id="edit-role"]')).not.toBeVisible();
   });
 
-  test("ユーザー情報を編集できる", async ({ page }) => {
-    const testEmail = `edit-test-${Date.now()}@example.com`;
-    const updatedName = `更新ユーザー_${Date.now()}`;
-
+  test("ユーザー名を編集できる", async ({ page }) => {
     await page.goto("/admin/users");
-    await page.click('button:has-text("新規ユーザー")');
-    await page.fill('input[id="email"]', testEmail);
-    await page.fill('input[id="name"]', "編集前ユーザー");
-    await page.fill('input[id="password"]', "TestPassword123!");
-    await page.selectOption('select[id="role"]', "STAFF");
-    await page.locator('button:has-text("作成")').last().click();
-    await expect(page.locator("text=新規ユーザー作成")).toBeHidden({ timeout: 15000 });
-    await expect(page.locator(`text=${testEmail}`)).toBeVisible({ timeout: 10000 });
+    const editButton = page.locator('[data-testid="edit-user-button"]').first();
+    await expect(editButton).toBeVisible({ timeout: 10000 });
+    await editButton.click();
 
-    const userRow = page.locator(`text=${testEmail}`).locator("..").locator("..").locator("..");
-    await userRow.locator('[data-testid="edit-user-button"]').click();
     await expect(page.getByRole("heading", { name: "ユーザー編集" })).toBeVisible();
-    await page.fill('input[id="edit-name"]', updatedName);
+
+    // 名前を変更
+    const nameInput = page.locator('input[id="edit-name"]');
+    const originalName = await nameInput.inputValue();
+    const newName = `テスト名_${Date.now()}`;
+    await nameInput.clear();
+    await nameInput.fill(newName);
     await page.click('button:has-text("更新")');
+
+    // ダイアログが閉じる
     await expect(page.getByRole("heading", { name: "ユーザー編集" })).toBeHidden({ timeout: 10000 });
+
+    // 変更が反映される
     await page.waitForTimeout(1000);
-    const updatedRow = page.locator(`text=${testEmail}`).locator("..").locator("..").locator("..");
-    await expect(updatedRow.locator(`text=${updatedName}`)).toBeVisible({ timeout: 15000 });
+    await expect(page.locator(`text=${newName}`)).toBeVisible({ timeout: 15000 });
+
+    // 元に戻す
+    await editButton.click();
+    await nameInput.clear();
+    await nameInput.fill(originalName || "管理者");
+    await page.click('button:has-text("更新")');
   });
 
   test("担当文書ボタンが表示される", async ({ page }) => {
@@ -120,17 +108,19 @@ test.describe("ユーザー管理", () => {
     await expect(page.locator("text=担当文書管理")).toBeVisible({ timeout: 5000 });
   });
 
-  test("ユーザー削除の確認ダイアログが表示される", async ({ page }) => {
+  test("担当文書ダイアログで文書一覧が表示される", async ({ page }) => {
     await page.goto("/admin/users");
-    page.on("dialog", async (dialog) => {
-      expect(dialog.type()).toBe("confirm");
-      await dialog.dismiss();
-    });
-    const deleteButtons = page.locator('[data-testid="delete-user-button"]');
-    const count = await deleteButtons.count();
-    if (count > 0) {
-      await deleteButtons.first().click();
-    }
+    await page.waitForTimeout(2000);
+    await page.locator('button:has-text("担当文書")').first().click();
+    await expect(page.locator("text=担当文書管理")).toBeVisible({ timeout: 5000 });
+    // 文書が読み込まれるまで待つ
+    await page.waitForTimeout(2000);
+    // 「担当者に設定」ボタンまたは「担当中」バッジが表示される
+    const assignButton = page.locator('button:has-text("担当者に設定")').first();
+    const assignedBadge = page.locator('[data-slot="badge"]:has-text("担当中")').first();
+    const assignVisible = await assignButton.isVisible().catch(() => false);
+    const badgeVisible = await assignedBadge.isVisible().catch(() => false);
+    expect(assignVisible || badgeVisible).toBe(true);
   });
 });
 
@@ -138,5 +128,26 @@ test.describe("ユーザー管理 - 権限", () => {
   test("未認証ユーザーはアクセスできない", async ({ page }) => {
     await page.goto("/admin/users");
     await expect(page).toHaveURL(/\/login/);
+  });
+});
+
+test.describe("ユーザー管理API", () => {
+  test("POST /api/users はauthサービスへのリダイレクト案内を返す", async ({ request }) => {
+    const response = await request.post("/api/users", {
+      data: {
+        email: "test@example.com",
+        name: "Test User",
+        password: "password123",
+      },
+    });
+    expect(response.status()).toBe(400);
+    const data = await response.json();
+    expect(data.error).toContain("認証サービス");
+    expect(data.authServiceUrl).toBeDefined();
+  });
+
+  test("GET /api/users は認証なしで401を返す", async ({ request }) => {
+    const response = await request.get("/api/users");
+    expect(response.status()).toBe(401);
   });
 });

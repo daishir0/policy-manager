@@ -1,113 +1,32 @@
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, validatePasswordStrength } from "@/lib/auth/password";
-import type { UserRole } from "@prisma/client";
 
-// バリデーションスキーマ
-export const createUserSchema = z.object({
-  email: z.string().email("有効なメールアドレスを入力してください"),
-  name: z.string().min(1, "名前を入力してください"),
-  password: z.string().min(8, "パスワードは8文字以上必要です"),
-  role: z.enum(["ADMIN", "STAFF"]).default("STAFF"),
-});
-
+// バリデーションスキーマ（ローカルDB更新用）
 export const updateUserSchema = z.object({
-  email: z.string().email("有効なメールアドレスを入力してください").optional(),
   name: z.string().min(1, "名前を入力してください").optional(),
-  password: z.string().min(8, "パスワードは8文字以上必要です").optional(),
-  role: z.enum(["ADMIN", "STAFF"]).optional(),
+  image: z.string().url("有効なURLを入力してください").optional().nullable(),
 });
 
-export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 export interface UserFilter {
   search?: string;
-  role?: string;
+  roles?: string[];  // authRoles配列でフィルタ
   page?: number;
   limit?: number;
 }
 
+/**
+ * ユーザーサービス
+ *
+ * 注: ユーザーの作成・削除・ロール管理は auth サービス (auth.senku.work) で行う
+ * このサービスはローカルDBにキャッシュされたユーザー情報の参照と、
+ * 文書への割り当て等のために使用する
+ */
 export class UserService {
-  async createUser(input: CreateUserInput) {
-    const validated = createUserSchema.parse(input);
-
-    const passwordCheck = validatePasswordStrength(validated.password);
-    if (!passwordCheck.isValid) {
-      throw new Error(passwordCheck.errors.join(", "));
-    }
-
-    const existing = await prisma.user.findUnique({
-      where: { email: validated.email },
-    });
-    if (existing) {
-      throw new Error("このメールアドレスは既に登録されています");
-    }
-
-    const hashedPassword = await hashPassword(validated.password);
-
-    const user = await prisma.user.create({
-      data: {
-        email: validated.email,
-        name: validated.name,
-        password: hashedPassword,
-        role: validated.role as UserRole,
-      },
-    });
-
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      createdAt: user.createdAt,
-    };
-  }
-
-  async updateUser(id: string, input: UpdateUserInput) {
-    const validated = updateUserSchema.parse(input);
-
-    let hashedPassword: string | undefined;
-    if (validated.password) {
-      const passwordCheck = validatePasswordStrength(validated.password);
-      if (!passwordCheck.isValid) {
-        throw new Error(passwordCheck.errors.join(", "));
-      }
-      hashedPassword = await hashPassword(validated.password);
-    }
-
-    if (validated.email) {
-      const existing = await prisma.user.findFirst({
-        where: { email: validated.email, NOT: { id } },
-      });
-      if (existing) {
-        throw new Error("このメールアドレスは既に登録されています");
-      }
-    }
-
-    const user = await prisma.user.update({
-      where: { id },
-      data: {
-        ...(validated.email && { email: validated.email }),
-        ...(validated.name && { name: validated.name }),
-        ...(hashedPassword && { password: hashedPassword }),
-        ...(validated.role && { role: validated.role as UserRole }),
-      },
-    });
-
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      updatedAt: user.updatedAt,
-    };
-  }
-
-  async deleteUser(id: string) {
-    await prisma.user.delete({ where: { id } });
-  }
-
+  /**
+   * ユーザー情報を取得（ローカルDBから）
+   */
   async getUser(id: string) {
     const user = await prisma.user.findUnique({
       where: { id },
@@ -115,6 +34,11 @@ export class UserService {
         assignedDocs: {
           where: { deletedAt: null },
           select: { id: true, title: true, status: true },
+        },
+        servicePermissions: {
+          include: {
+            permission: true,
+          },
         },
       },
     });
@@ -127,17 +51,28 @@ export class UserService {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      image: user.image,
+      authRoles: user.authRoles,
+      syncedAt: user.syncedAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
-      failedLoginAttempts: user.failedLoginAttempts,
-      lockedUntil: user.lockedUntil,
       assignedDocuments: user.assignedDocs,
+      servicePermissions: user.servicePermissions.map((sp) => ({
+        id: sp.permission.id,
+        name: sp.permission.name,
+        displayName: sp.permission.displayName,
+        category: sp.permission.category,
+        grantedAt: sp.grantedAt,
+        grantedBy: sp.grantedBy,
+      })),
     };
   }
 
+  /**
+   * ユーザー一覧を取得（ローカルDBから）
+   */
   async listUsers(filter: UserFilter = {}) {
-    const { search, role, page = 1, limit = 20 } = filter;
+    const { search, roles, page = 1, limit = 20 } = filter;
     const skip = (page - 1) * limit;
 
     const where = {
@@ -147,7 +82,10 @@ export class UserService {
           { name: { contains: search, mode: "insensitive" as const } },
         ],
       }),
-      ...(role && { role: role as UserRole }),
+      // authRoles配列に指定されたロールのいずれかが含まれるかチェック
+      ...(roles && roles.length > 0 && {
+        authRoles: { hasSome: roles },
+      }),
     };
 
     const [users, total] = await Promise.all([
@@ -155,7 +93,13 @@ export class UserService {
         where,
         skip,
         take: limit,
-        orderBy: { createdAt: "desc" },
+        orderBy: { syncedAt: "desc" },
+        include: {
+          assignedDocs: {
+            where: { deletedAt: null },
+            select: { id: true, title: true, status: true },
+          },
+        },
       }),
       prisma.user.count({ where }),
     ]);
@@ -165,10 +109,11 @@ export class UserService {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role,
+        image: user.image,
+        authRoles: user.authRoles,
+        syncedAt: user.syncedAt,
         createdAt: user.createdAt,
-        lockedUntil: user.lockedUntil,
-        isLocked: user.lockedUntil ? new Date(user.lockedUntil) > new Date() : false,
+        assignedDocs: user.assignedDocs,
       })),
       pagination: {
         page,
@@ -179,10 +124,82 @@ export class UserService {
     };
   }
 
-  async unlockUser(id: string) {
-    await prisma.user.update({
+  /**
+   * ユーザーのローカル情報を更新
+   * 注: name, image のみ更新可能（ロール等はauth側で管理）
+   */
+  async updateUser(id: string, input: UpdateUserInput) {
+    const validated = updateUserSchema.parse(input);
+
+    const user = await prisma.user.update({
       where: { id },
-      data: { failedLoginAttempts: 0, lockedUntil: null },
+      data: {
+        ...(validated.name !== undefined && { name: validated.name }),
+        ...(validated.image !== undefined && { image: validated.image }),
+      },
+    });
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      image: user.image,
+      authRoles: user.authRoles,
+      updatedAt: user.updatedAt,
+    };
+  }
+
+  /**
+   * 文書への担当者割り当て用にユーザーを検索
+   */
+  async searchUsersForAssignment(query: string, limit = 10) {
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { email: { contains: query, mode: "insensitive" } },
+          { name: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        image: true,
+      },
+      take: limit,
+    });
+
+    return users;
+  }
+
+  /**
+   * ユーザーが存在するか確認（作成されていなければ作成）
+   * OAuth ログイン時に呼ばれることを想定
+   */
+  async ensureUser(userData: {
+    id: string;
+    email: string;
+    name?: string | null;
+    image?: string | null;
+    authRoles?: string[];
+  }) {
+    return prisma.user.upsert({
+      where: { id: userData.id },
+      create: {
+        id: userData.id,
+        email: userData.email,
+        name: userData.name,
+        image: userData.image,
+        authRoles: userData.authRoles || [],
+        syncedAt: new Date(),
+      },
+      update: {
+        email: userData.email,
+        name: userData.name || undefined,
+        image: userData.image || undefined,
+        authRoles: userData.authRoles || undefined,
+        syncedAt: new Date(),
+      },
     });
   }
 }

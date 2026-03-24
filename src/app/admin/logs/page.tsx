@@ -89,6 +89,12 @@ const ACTION_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructiv
   ai_error: "destructive",
 };
 
+// 管理者ロールチェック（super_admin または admin）
+const hasAdminRole = (roles: string[] | undefined): boolean => {
+  if (!roles) return false;
+  return roles.some((role) => ["super_admin", "admin", "ADMIN"].includes(role));
+};
+
 export default function LogsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -104,14 +110,14 @@ export default function LogsPage() {
 
   useEffect(() => {
     if (status === "loading") return;
-    if (!session || session.user.role !== "ADMIN") {
+    if (!session || !hasAdminRole(session.user.roles)) {
       router.replace("/admin");
     }
   }, [session, status, router]);
 
   // ユーザー一覧を取得（ドロップダウン用）
   useEffect(() => {
-    if (!session || session.user.role !== "ADMIN") return;
+    if (!session || !hasAdminRole(session.user.roles)) return;
     fetch("/api/users?limit=100")
       .then((res) => res.json())
       .then((result) => {
@@ -121,7 +127,7 @@ export default function LogsPage() {
   }, [session]);
 
   const fetchLogs = useCallback(async () => {
-    if (!session || session.user.role !== "ADMIN") return;
+    if (!session || !hasAdminRole(session.user.roles)) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -171,7 +177,7 @@ export default function LogsPage() {
     setCurrentPage(1);
   };
 
-  if (status === "loading" || (session && session.user.role !== "ADMIN")) {
+  if (status === "loading" || (session && !hasAdminRole(session.user.roles))) {
     return (
       <div className="flex items-center justify-center h-48">
         <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />

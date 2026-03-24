@@ -270,7 +270,11 @@ export function AdminHeader() {
             <Button variant="ghost" className="relative h-8 w-8 rounded-full" data-testid="user-menu">
               <Avatar className="h-8 w-8">
                 <AvatarImage
-                  src={session?.user?.image || ""}
+                  src={
+                    session?.user?.id
+                      ? `https://auth.senku.work/avatars/${session.user.id}.jpg?t=${Math.floor(Date.now() / 60000)}`
+                      : session?.user?.image || ""
+                  }
                   alt={session?.user?.name || "User"}
                 />
                 <AvatarFallback>
@@ -291,9 +295,16 @@ export function AdminHeader() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              <span>プロフィール</span>
+            <DropdownMenuItem asChild>
+              <a
+                href="https://auth.senku.work/profile"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center"
+              >
+                <User className="mr-2 h-4 w-4" />
+                <span>プロフィール</span>
+              </a>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut}>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { aiService } from "@/lib/services/ai.service";
 import { auditService } from "@/lib/services/audit.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.AI_QA)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.AI_QA)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 

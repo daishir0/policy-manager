@@ -4,7 +4,7 @@ import { documentService } from "@/lib/services/document.service";
 import { auditService } from "@/lib/services/audit.service";
 import { aiService } from "@/lib/services/ai.service";
 import { analyticsService } from "@/lib/services/analytics.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { DocumentStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.DOCUMENT_READ)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.DOCUMENT_READ)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.DOCUMENT_CREATE)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.DOCUMENT_CREATE)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 

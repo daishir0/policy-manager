@@ -4,7 +4,15 @@ import "next-auth/jwt";
 declare module "next-auth" {
   interface User {
     id: string;
-    role: string;
+    roles: string[];          // authサービスからのロール配列
+    permissions: string[];    // authサービスからの権限配列
+    name?: string | null;
+    picture?: string | null;
+    primaryOrganization?: {
+      id: string;
+      name: string;
+      code: string;
+    } | null;
   }
 
   interface Session {
@@ -13,7 +21,13 @@ declare module "next-auth" {
       email: string;
       name?: string | null;
       image?: string | null;
-      role: string;
+      roles: string[];
+      permissions: string[];
+      primaryOrganization?: {
+        id: string;
+        name: string;
+        code: string;
+      } | null;
     };
   }
 }
@@ -21,6 +35,12 @@ declare module "next-auth" {
 declare module "next-auth/jwt" {
   interface JWT {
     id: string;
-    role: string;
+    roles: string[];
+    permissions: string[];
+    primaryOrganization?: {
+      id: string;
+      name: string;
+      code: string;
+    } | null;
   }
 }

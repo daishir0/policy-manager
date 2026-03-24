@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { pdfService } from "@/lib/services/pdf.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 import { auditService } from "@/lib/services/audit.service";
 
 export async function POST(
@@ -13,7 +13,7 @@ export async function POST(
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.DOCUMENT_UPDATE)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.DOCUMENT_UPDATE)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 

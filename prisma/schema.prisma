@@ -11,34 +11,27 @@ datasource db {
 }
 
 // ========================================
-// 認証・ユーザー管理
+// ユーザー参照（authサービスからのキャッシュ）
 // ========================================
 
-enum UserRole {
-  ADMIN
-  STAFF
-}
+// 注: 認証はauthサービス（auth.senku.work）で行われる
+// このテーブルはauthサービスのユーザー情報のローカルキャッシュ
 
 model User {
-  id            String    @id @default(cuid())
+  id            String    @id // authサービスのユーザーID (UUID)
   email         String    @unique
-  name          String?
-  password      String    // bcryptハッシュ
-  emailVerified DateTime?
-  image         String?
-  role          UserRole  @default(STAFF)
+  name          String?   // プロフィールから取得した表示名
+  image         String?   // アバターURL
 
-  // ロック関連
-  failedLoginAttempts Int       @default(0)
-  lockedUntil         DateTime?
+  // authサービスから同期したロール情報（キャッシュ）
+  authRoles     String[]  @default([])
 
   // タイムスタンプ
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  syncedAt      DateTime  @default(now()) // authから最後に同期した日時
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // リレーション
-  accounts        Account[]
-  sessions        Session[]
   documents       Document[]         @relation("CreatedDocuments")
   assignedDocs    Document[]         @relation("AssignedDocuments")
   editedVersions  DocumentVersion[]  @relation("EditedVersions")
@@ -46,46 +39,47 @@ model User {
   qaInteractions  QAInteraction[]
   bookmarks       Bookmark[]
   messages        Message[]          @relation("ReceivedMessages")
+  servicePermissions UserServicePermission[]
 
   @@map("users")
 }
 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+// ========================================
+// サービス固有権限
+// ========================================
 
-  @@unique([provider, providerAccountId])
-  @@map("accounts")
+// サービス固有の権限マスタ
+model ServicePermission {
+  id          String   @id @default(cuid())
+  name        String   @unique // document:read, document:write, document:admin, etc.
+  displayName String
+  description String?
+  category    String   // document, qa, admin, etc.
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // リレーション
+  users UserServicePermission[]
+
+  @@index([category])
+  @@map("service_permissions")
 }
 
-model Session {
+// ユーザーとサービス権限の関連
+model UserServicePermission {
   id           String   @id @default(cuid())
-  sessionToken String   @unique
   userId       String
-  expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   ServicePermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  grantedAt    DateTime @default(now())
+  grantedBy    String?  // 付与した管理者のユーザーID
 
-  @@map("sessions")
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-  @@map("verification_tokens")
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+  @@map("user_service_permissions")
 }
 
 // ========================================

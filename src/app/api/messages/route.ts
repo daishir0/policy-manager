@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { messageService } from "@/lib/services/message.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.MESSAGE_READ)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.MESSAGE_READ)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 
@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.MESSAGE_CREATE)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.MESSAGE_CREATE)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 

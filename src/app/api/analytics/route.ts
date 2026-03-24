@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { analyticsService } from "@/lib/services/analytics.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.ANALYTICS_VIEW)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.ANALYTICS_VIEW)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 

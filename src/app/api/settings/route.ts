@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { settingsService } from "@/lib/services/settings.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 
 // マスク対象のキー
 const MASKED_KEYS = ["ANTHROPIC_API_KEY"];
@@ -19,7 +19,7 @@ export async function GET() {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.SETTINGS_VIEW)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.SETTINGS_VIEW)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 
@@ -47,7 +47,7 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.SETTINGS_VIEW)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.SETTINGS_UPDATE)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 

@@ -4,7 +4,7 @@ import { documentService } from "@/lib/services/document.service";
 import { auditService } from "@/lib/services/audit.service";
 import { analyticsService } from "@/lib/services/analytics.service";
 import { aiService } from "@/lib/services/ai.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +15,7 @@ export async function GET(
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.DOCUMENT_READ)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.DOCUMENT_READ)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 
@@ -59,7 +59,7 @@ export async function PATCH(
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.DOCUMENT_UPDATE)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.DOCUMENT_UPDATE)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 
@@ -105,7 +105,7 @@ export async function DELETE(
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.DOCUMENT_DELETE)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.DOCUMENT_DELETE)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 

@@ -1,18 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { loginWithOIDC } from "./helpers/auth";
 
 const ADMIN_EMAIL = process.env.TEST_USER_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.TEST_USER_PASSWORD || "password123";
 
 test.describe("文書管理", () => {
-  test.beforeEach(async ({ page, request }) => {
-    try {
-      await request.post("/api/test/reset-user-lock", { data: { email: ADMIN_EMAIL } });
-    } catch { /* ignore */ }
-    await page.goto("/login");
-    await page.fill('input[type="email"]', ADMIN_EMAIL);
-    await page.fill('input[type="password"]', ADMIN_PASSWORD);
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/admin/, { timeout: 10000 });
+  test.beforeEach(async ({ page }) => {
+    await loginWithOIDC(page, ADMIN_EMAIL, ADMIN_PASSWORD);
   });
 
   test("文書一覧ページが表示される", async ({ page }) => {
@@ -61,8 +55,10 @@ test.describe("文書管理", () => {
 
   test("新規作成ページに遷移できる", async ({ page }) => {
     await page.goto("/admin/documents");
-    await page.click('text=新規作成');
-    await expect(page).toHaveURL(/\/admin\/documents\/new/);
+    await page.click('button:has-text("新規作成")');
+    // ドロップダウンメニューから「手動で作成」を選択
+    await page.click('text=手動で作成');
+    await expect(page).toHaveURL(/\/admin\/documents\/new/, { timeout: 10000 });
     await expect(page.locator("h1")).toContainText("新規文書作成");
   });
 
@@ -112,10 +108,8 @@ test.describe("文書管理", () => {
       await page.waitForURL(/\/admin\/documents\/[^/]+$/, { timeout: 10000 });
       await page.waitForTimeout(3000);
       await page.getByRole("tab", { name: "本文" }).click();
-      // marked.jsロードを待つ（CDN）
-      await page.waitForTimeout(3000);
-      // コンテンツエリアが表示される
-      await expect(page.locator(".prose, pre, [data-markdown]").first()).toBeVisible({ timeout: 10000 });
+      // コンテンツエリア（tabpanel内）が表示される
+      await expect(page.getByRole("tabpanel", { name: "本文" })).toBeVisible({ timeout: 10000 });
     });
 
     test("文書を編集できる", async ({ page }) => {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { aiService } from "@/lib/services/ai.service";
 import { auditService } from "@/lib/services/audit.service";
-import { hasPermission, PERMISSIONS, type Role } from "@/lib/auth/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/auth/permissions";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "認証が必要です" }, { status: 401 });
   }
 
-  if (!hasPermission(session.user.role as Role, PERMISSIONS.AI_DRAFT_GENERATE)) {
+  if (!hasPermission(session.user.roles, session.user.permissions, PERMISSIONS.AI_DRAFT_GENERATE)) {
     return NextResponse.json({ error: "権限がありません" }, { status: 403 });
   }
 
