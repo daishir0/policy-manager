@@ -17,7 +17,7 @@ function LoginContent() {
     setError("");
     setIsLoading(true);
     try {
-      await signIn("senku-auth", { callbackUrl });
+      await signIn("auth-provider", { callbackUrl });
     } catch {
       setError("ログインに失敗しました。");
       setIsLoading(false);
@@ -81,7 +81,7 @@ function LoginContent() {
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
-                <span>Senku Auth でログイン</span>
+                <span>ログイン</span>
               </>
             )}
           </button>
@@ -93,7 +93,7 @@ function LoginContent() {
           </h3>
           <div className="text-sm text-blue-700 space-y-1">
             <p>
-              共通認証基盤（Senku Auth）を使用してログインします。
+              共通認証基盤を使用してログインします。
             </p>
             <p className="text-xs text-blue-600 mt-2">
               ※ 事前にシステム管理者からアカウントを発行してもらう必要があります。

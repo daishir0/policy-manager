@@ -42,16 +42,16 @@ interface AuthUserInfo {
 }
 
 /**
- * Senku Auth (OAuth 2.0 / OIDC) Provider
- * 共通認証基盤 auth.senku.work を使用
+ * Auth Provider (OAuth 2.0 / OIDC)
+ * 共通認証基盤を使用
  */
-const SenkuAuthProvider = {
-  id: "senku-auth",
-  name: "Senku Auth",
+const AuthProvider = {
+  id: "auth-provider",
+  name: "Auth Provider",
   type: "oidc" as const,
-  issuer: process.env.AUTH_SENKU_ISSUER,
-  clientId: process.env.AUTH_SENKU_ID,
-  clientSecret: process.env.AUTH_SENKU_SECRET,
+  issuer: process.env.AUTH_PROVIDER_ISSUER,
+  clientId: process.env.AUTH_PROVIDER_ID,
+  clientSecret: process.env.AUTH_PROVIDER_SECRET,
   authorization: { params: { scope: "openid profile email custom" } },
 };
 
@@ -83,7 +83,7 @@ async function syncUserToLocalDB(userInfo: AuthUserInfo): Promise<void> {
 
 const fullAuthConfig: NextAuthConfig = {
   ...authConfig,
-  providers: [SenkuAuthProvider],
+  providers: [AuthProvider],
   callbacks: {
     ...authConfig.callbacks,
     async jwt({ token, account, profile }) {

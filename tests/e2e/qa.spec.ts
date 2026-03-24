@@ -5,6 +5,9 @@ const AI_ENABLED = !!process.env.ANTHROPIC_API_KEY;
 const ADMIN_EMAIL = process.env.TEST_USER_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.TEST_USER_PASSWORD || "password123";
 
+// テストタイムアウトを延長（ログインフローが長い場合があるため）
+test.setTimeout(120000);
+
 test.describe("対話型Q&A", () => {
   test.beforeEach(async ({ page }) => {
     await loginWithOIDC(page, ADMIN_EMAIL, ADMIN_PASSWORD);

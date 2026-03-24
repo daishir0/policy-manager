@@ -50,6 +50,11 @@ const isAdminUser = (roles: string[]): boolean => {
   return roles.some((role) => ["super_admin", "admin", "ADMIN"].includes(role));
 };
 
+// 認証サービスのベースURL（環境変数から取得）
+const authAdminUrl = process.env.NEXT_PUBLIC_AUTH_BASE_URL
+  ? `${process.env.NEXT_PUBLIC_AUTH_BASE_URL}/admin/users`
+  : null;
+
 export default function UsersPage() {
   const [data, setData] = useState<UsersResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -165,12 +170,14 @@ export default function UsersPage() {
           <h1 className="text-3xl font-bold tracking-tight">ユーザー管理</h1>
           <p className="text-muted-foreground">システムユーザーの担当者割り当てを行います</p>
         </div>
-        <Button asChild variant="outline">
-          <a href="https://auth.senku.work/admin/users" target="_blank" rel="noopener noreferrer">
-            <ExternalLink className="mr-2 h-4 w-4" />
-            認証サービスでユーザー管理
-          </a>
-        </Button>
+        {authAdminUrl && (
+          <Button asChild variant="outline">
+            <a href={authAdminUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4" />
+              認証サービスでユーザー管理
+            </a>
+          </Button>
+        )}
       </div>
 
       {/* 検索 */}
@@ -286,7 +293,7 @@ export default function UsersPage() {
               />
             </div>
             <p className="text-sm text-muted-foreground">
-              ※ ロールや認証情報は<a href="https://auth.senku.work/admin/users" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">認証サービス</a>で管理されています
+              ※ ロールや認証情報は{authAdminUrl ? <a href={authAdminUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">認証サービス</a> : "認証サービス"}で管理されています
             </p>
           </div>
           <DialogFooter>

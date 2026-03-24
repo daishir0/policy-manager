@@ -4,7 +4,7 @@ import { loginWithOIDC } from "./helpers/auth";
 /**
  * 認証フロー E2Eテスト
  *
- * 注: 認証は auth.senku.work (OIDC) 経由で行われます。
+ * 注: 認証は OIDC 経由で行われます。
  * このテストファイルでは policy-manager 側の認証関連動作をテストします。
  *
  * 環境変数:
@@ -19,10 +19,13 @@ const ADMIN_PASSWORD = process.env.TEST_USER_PASSWORD || "password123";
 const STAFF_EMAIL = process.env.TEST_STAFF_EMAIL || "staff01@example.com";
 const STAFF_PASSWORD = process.env.TEST_STAFF_PASSWORD || "password123";
 
+// テストタイムアウトを延長（ログインフローが長い場合があるため）
+test.setTimeout(120000);
+
 test.describe("認証フロー（OIDC経由）", () => {
   test("未認証ユーザーはログインページへリダイレクトされる", async ({ page }) => {
     await page.goto("/admin");
-    // OIDC経由のログインのため、auth.senku.work へリダイレクトされるか、
+    // OIDC経由のログインのため、認証サーバーへリダイレクトされるか、
     // または policy-manager のログインページが表示される
     await expect(page).toHaveURL(/\/(login|oauth\/authorize)/);
   });
@@ -109,7 +112,7 @@ test.describe("認証フロー（OIDC経由）", () => {
 
 test.describe("アカウントロック（auth サービス管理）", () => {
   /**
-   * アカウントロック機能は auth.senku.work で管理されます。
+   * アカウントロック機能は認証サービスで管理されます。
    * policy-manager 側ではロック状態の確認APIのみ提供します。
    */
   test("check-lock APIが正しく応答する（deprecated）", async ({ request }) => {

@@ -23,7 +23,7 @@ Key features:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/daishir0/policy-manager.git
+git clone <your-repo-url>
 cd policy-manager
 ```
 
@@ -137,7 +137,7 @@ Policy Managerは、組織の方針書・ガイドライン・ハンドブック
 
 1. リポジトリをクローン:
 ```bash
-git clone https://github.com/daishir0/policy-manager.git
+git clone <your-repo-url>
 cd policy-manager
 ```
 

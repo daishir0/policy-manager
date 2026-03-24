@@ -75,11 +75,12 @@ export async function PATCH(
  * このエンドポイントは案内メッセージを返す
  */
 export async function DELETE() {
+  const authServiceUrl = process.env.AUTH_PROVIDER_ISSUER;
   return NextResponse.json(
     {
-      error: "ユーザーの削除は認証サービス (auth.senku.work) で行ってください",
+      error: "ユーザーの削除は認証サービスで行ってください",
       message: "User deletion is handled by the auth service",
-      authServiceUrl: process.env.AUTH_SENKU_ISSUER || "https://auth.senku.work",
+      ...(authServiceUrl && { authServiceUrl }),
     },
     { status: 400 }
   );

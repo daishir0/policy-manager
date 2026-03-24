@@ -1,15 +1,21 @@
 import { test, expect } from "@playwright/test";
 import { loginWithOIDC } from "./helpers/auth";
 
+// E2Eテスト用ドメイン設定（環境変数から取得）
+const AUTH_DOMAIN = process.env.PLAYWRIGHT_AUTH_DOMAIN || 'localhost:3019';
+
 /**
  * ユーザー管理 E2Eテスト
  *
- * 注: ユーザーの作成・削除・ロール管理は auth.senku.work で行われます。
+ * 注: ユーザーの作成・削除・ロール管理は認証サービスで行われます。
  * policy-manager ではユーザー一覧の表示、名前の編集、文書の割り当てのみ行えます。
  */
 
 const ADMIN_EMAIL = process.env.TEST_USER_EMAIL || "admin@example.com";
 const ADMIN_PASSWORD = process.env.TEST_USER_PASSWORD || "password123";
+
+// テストタイムアウトを延長（ログインフローが長い場合があるため）
+test.setTimeout(120000);
 
 test.describe("ユーザー管理", () => {
   test.beforeEach(async ({ page }) => {
@@ -48,8 +54,8 @@ test.describe("ユーザー管理", () => {
 
   test("認証サービスへのリンクが表示される", async ({ page }) => {
     await page.goto("/admin/users");
-    // ユーザー作成はauthサービスで行うためのリンク
-    const authLink = page.locator('a[href*="auth.senku.work"]');
+    // ユーザー作成は認証サービスで行うためのリンク
+    const authLink = page.locator(`a[href*="${AUTH_DOMAIN}"]`);
     await expect(authLink).toBeVisible({ timeout: 10000 });
     await expect(authLink).toContainText(/認証サービス|ユーザー管理/);
   });

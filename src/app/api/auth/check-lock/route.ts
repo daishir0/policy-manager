@@ -5,11 +5,12 @@ import { NextResponse } from "next/server";
  * @deprecated このエンドポイントは非推奨です
  */
 export async function POST() {
+  const authServiceUrl = process.env.AUTH_PROVIDER_ISSUER;
   return NextResponse.json(
     {
       locked: false,
-      message: "アカウントロック機能は認証サービス (auth.senku.work) で管理されています",
-      authServiceUrl: process.env.AUTH_SENKU_ISSUER || "https://auth.senku.work",
+      message: "アカウントロック機能は認証サービスで管理されています",
+      ...(authServiceUrl && { authServiceUrl }),
     }
   );
 }

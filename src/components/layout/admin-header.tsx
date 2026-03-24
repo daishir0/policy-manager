@@ -37,6 +37,9 @@ interface ContradictionNotification {
   createdAt: string;
 }
 
+// 認証サービスのベースURL
+const authBaseUrl = process.env.NEXT_PUBLIC_AUTH_BASE_URL || '';
+
 export function AdminHeader() {
   const { data: session } = useSession();
   const [unreadCount, setUnreadCount] = useState(0);
@@ -271,8 +274,8 @@ export function AdminHeader() {
               <Avatar className="h-8 w-8">
                 <AvatarImage
                   src={
-                    session?.user?.id
-                      ? `https://auth.senku.work/avatars/${session.user.id}.jpg?t=${Math.floor(Date.now() / 60000)}`
+                    session?.user?.id && authBaseUrl
+                      ? `${authBaseUrl}/avatars/${session.user.id}.jpg?t=${Math.floor(Date.now() / 60000)}`
                       : session?.user?.image || ""
                   }
                   alt={session?.user?.name || "User"}
@@ -295,17 +298,19 @@ export function AdminHeader() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <a
-                href="https://auth.senku.work/profile"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center"
-              >
-                <User className="mr-2 h-4 w-4" />
-                <span>プロフィール</span>
-              </a>
-            </DropdownMenuItem>
+            {authBaseUrl && (
+              <DropdownMenuItem asChild>
+                <a
+                  href={`${authBaseUrl}/profile`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center"
+                >
+                  <User className="mr-2 h-4 w-4" />
+                  <span>プロフィール</span>
+                </a>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut}>
               <LogOut className="mr-2 h-4 w-4" />

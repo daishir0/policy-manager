@@ -1,10 +1,17 @@
 import { Page } from "@playwright/test";
 
+// E2Eテスト用ドメイン設定（環境変数から取得）
+const AUTH_DOMAIN = process.env.PLAYWRIGHT_AUTH_DOMAIN || 'localhost:3019';
+const APP_DOMAIN = process.env.PLAYWRIGHT_APP_DOMAIN || 'localhost:3018';
+
+// 正規表現用にドメインをエスケープ
+const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
  * OIDC認証フローでログインする
  * 1. policy-manager の /login ページで「Senku Auth でログイン」ボタンをクリック
- * 2. auth.senku.work/oauth/authorize にリダイレクト
- * 3. 未認証の場合は auth.senku.work/login にリダイレクト
+ * 2. 認証サーバーの /oauth/authorize にリダイレクト
+ * 3. 未認証の場合は認証サーバーの /login にリダイレクト
  * 4. メールアドレス・パスワードを入力してログイン
  * 5. policy-manager に戻る
  */
@@ -25,11 +32,11 @@ export async function loginWithOIDC(
   await loginButton.waitFor({ state: "visible", timeout: 10000 });
   await loginButton.click();
 
-  // auth.senku.work へリダイレクトを待つ（OAuth authorizeまたはlogin）
-  await page.waitForURL(/auth\.senku\.work/, { timeout: 20000 });
+  // 認証サーバーへリダイレクトを待つ（OAuth authorizeまたはlogin）
+  await page.waitForURL(new RegExp(escapeRegex(AUTH_DOMAIN)), { timeout: 20000 });
   await page.waitForLoadState("networkidle");
 
-  // auth.senku.work のログインフォームを待つ
+  // 認証サーバーのログインフォームを待つ
   // （既にログイン済みの場合はコールバックに直接リダイレクトされる）
   const currentUrl = page.url();
 
@@ -68,7 +75,7 @@ export async function loginWithOIDC(
 
   // policy-manager に戻るのを待つ（最大30秒）
   try {
-    await page.waitForURL(/policy-manager\.senku\.work\/admin/, { timeout: 30000 });
+    await page.waitForURL(new RegExp(`${escapeRegex(APP_DOMAIN)}/admin`), { timeout: 30000 });
   } catch {
     // コールバック処理中の場合
     if (page.url().includes("/api/auth") || page.url().includes("/callback")) {

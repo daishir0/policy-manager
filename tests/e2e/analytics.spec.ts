@@ -6,6 +6,9 @@ const ADMIN_PASSWORD = process.env.TEST_USER_PASSWORD || "password123";
 const STAFF_EMAIL = process.env.TEST_STAFF_EMAIL || "staff01@example.com";
 const STAFF_PASSWORD = process.env.TEST_STAFF_PASSWORD || "password123";
 
+// テストタイムアウトを延長（ログインフローが長い場合があるため）
+test.setTimeout(120000);
+
 test.describe("アクセス統計（admin only）", () => {
   test.describe("管理者アクセス", () => {
     test.beforeEach(async ({ page }) => {
