@@ -51,8 +51,9 @@ const isAdminUser = (roles: string[]): boolean => {
 };
 
 // 認証サービスのベースURL（環境変数から取得）
+// authサービスは (admin) Route Groupを使用しているため、URLは /users になる
 const authAdminUrl = process.env.NEXT_PUBLIC_AUTH_BASE_URL
-  ? `${process.env.NEXT_PUBLIC_AUTH_BASE_URL}/admin/users`
+  ? `${process.env.NEXT_PUBLIC_AUTH_BASE_URL}/users`
   : null;
 
 export default function UsersPage() {
