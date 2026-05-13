@@ -85,6 +85,17 @@ export async function loginWithOIDC(
 
   // 管理画面が表示されるまで待つ
   await page.waitForLoadState("networkidle");
+
+  // セッション確立の最終確認: /admin を踏み直してログインページに戻されないこと
+  await page.goto("/admin", { waitUntil: "networkidle" });
+  if (page.url().includes("/login")) {
+    // session cookie 書き込みのタイミング差で稀に直後に未確立な場合がある
+    await page.waitForTimeout(1500);
+    await page.goto("/admin", { waitUntil: "networkidle" });
+  }
+  if (page.url().includes("/login")) {
+    throw new Error(`loginWithOIDC: セッション確立に失敗 (redirected to ${page.url()})`);
+  }
 }
 
 /**
