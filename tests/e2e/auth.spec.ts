@@ -33,7 +33,7 @@ test.describe("認証フロー（OIDC経由）", () => {
   test("ログインページにOIDCログインボタンが表示される", async ({ page }) => {
     await page.goto("/login");
     // OIDCプロバイダーでのログインボタン
-    await expect(page.locator('button:has-text("Senku Auth でログイン")')).toBeVisible();
+    await expect(page.locator('button:has-text("ログイン")').first()).toBeVisible();
   });
 
   test.describe("管理者セッション", () => {

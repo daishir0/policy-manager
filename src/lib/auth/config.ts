@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import type { NextAuthConfig } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authConfig } from "./auth.config";
+import { revokeAccessToken } from "./revoke";
 
 // userinfoのレスポンス型
 interface AuthUserInfo {
@@ -91,6 +92,11 @@ const fullAuthConfig: NextAuthConfig = {
       if (account && profile) {
         const userInfo = profile as unknown as AuthUserInfo;
 
+        // ログアウト時の revoke 呼び出しに使うため accessToken を保存
+        if (typeof account.access_token === "string") {
+          token.accessToken = account.access_token;
+        }
+
         token.id = userInfo.sub || "";
         token.email = userInfo.email || "";
         token.roles = userInfo.roles || [];
@@ -134,6 +140,15 @@ const fullAuthConfig: NextAuthConfig = {
   session: {
     strategy: "jwt",
     maxAge: 8 * 60 * 60, // 8時間
+  },
+  events: {
+    async signOut(message) {
+      const token = "token" in message ? message.token : null;
+      const accessToken = token && typeof token.accessToken === "string" ? token.accessToken : null;
+      if (accessToken) {
+        await revokeAccessToken({ token: accessToken, tokenTypeHint: "access_token" });
+      }
+    },
   },
   trustHost: true,
 };

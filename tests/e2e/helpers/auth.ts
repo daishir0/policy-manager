@@ -27,8 +27,8 @@ export async function loginWithOIDC(
   await page.goto("/login");
   await page.waitForLoadState("networkidle");
 
-  // 「Senku Auth でログイン」ボタンをクリック
-  const loginButton = page.locator('button:has-text("Senku Auth でログイン")');
+  // OIDCログインボタンをクリック（テキストは「ログイン」を含むボタン）
+  const loginButton = page.locator('button:has-text("ログイン")').first();
   await loginButton.waitFor({ state: "visible", timeout: 10000 });
   await loginButton.click();
 
